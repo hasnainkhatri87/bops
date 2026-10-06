@@ -80,14 +80,14 @@ $z = 0
   [void][BopsWindowApi]::GetWindowText($hWnd, $sb, $sb.Capacity)
   $title = $sb.ToString().Trim()
   if (-not $title) { return $true }
-  $pid = [uint32]0
-  [void][BopsWindowApi]::GetWindowThreadProcessId($hWnd, [ref]$pid)
+  $processId = [uint32]0
+  [void][BopsWindowApi]::GetWindowThreadProcessId($hWnd, [ref]$processId)
   $rect = New-Object BopsWindowApi+RECT
   if (-not [BopsWindowApi]::GetWindowRect($hWnd, [ref]$rect)) { return $true }
   $w = [Math]::Max(0, $rect.Right - $rect.Left)
   $h = [Math]::Max(0, $rect.Bottom - $rect.Top)
   if ($w -lt 40 -or $h -lt 40) { return $true }
-  try { $p = Get-Process -Id $pid -ErrorAction Stop } catch { return $true }
+  try { $p = Get-Process -Id $processId -ErrorAction Stop } catch { return $true }
   $process = $p.ProcessName
   $app = $process
   try {
@@ -97,7 +97,7 @@ $z = 0
   $items.Add([pscustomobject]@{
     app_name = $app
     process_name = $process
-    pid = [int]$pid
+    pid = [int]$processId
     window_id = $hWnd.ToInt64()
     title = $title
     is_on_screen = -not [BopsWindowApi]::IsIconic($hWnd)
