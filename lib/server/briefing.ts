@@ -118,10 +118,10 @@ public static class BopsForeground {
 }
 "@
 $h=[BopsForeground]::GetForegroundWindow()
-$pid=[uint32]0
-[void][BopsForeground]::GetWindowThreadProcessId($h,[ref]$pid)
+$processId=[uint32]0
+[void][BopsForeground]::GetWindowThreadProcessId($h,[ref]$processId)
 try {
-  $p=Get-Process -Id $pid -ErrorAction Stop
+  $p=Get-Process -Id $processId -ErrorAction Stop
   $name=$p.ProcessName
   try { if ($p.MainModule.FileVersionInfo.FileDescription) { $name=$p.MainModule.FileVersionInfo.FileDescription } } catch {}
   $name
