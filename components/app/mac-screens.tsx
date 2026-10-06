@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 /**
- * Seeing your Mac, live: the Bops Mac app (desktop/main.cjs) lists the displays and windows it can
- * show; the page streams one with getUserMedia. The Your Mac tab (mac-computer.tsx) is built on these.
+ * Seeing your PC, live: the Bops Windows app (desktop/main.cjs) lists the displays and windows it can
+ * show; the page streams one with getUserMedia. The Your PC tab (mac-computer.tsx) is built on these.
  */
 
 type Display = { id: string; label: string; width: number; height: number; primary: boolean };
@@ -18,10 +18,10 @@ declare global {
 }
 
 const noop = () => () => {};
-/** True inside the Bops Mac app (false while rendering on the server, so the page hydrates cleanly). */
+/** True inside the Bops Windows app (false while rendering on the server, so the page hydrates cleanly). */
 export const useMacApp = () => useSyncExternalStore(noop, () => !!window.bopsMac, () => false);
 
-/** The displays and windows the Mac app can show, checked every few seconds (displays come and go). */
+/** The displays and windows the Windows app can show, checked every few seconds (displays come and go). */
 export function useMacScreens(every = 3000) {
   const [screens, setScreens] = useState<Screens | null>(null);
   const inApp = useMacApp();
@@ -42,7 +42,7 @@ export function useMacScreens(every = 3000) {
   return screens;
 }
 
-/** The window each app has on the Mac (from the server, which asks Cua Driver), checked every few seconds. */
+/** The window each app has on the PC (from the server, which asks Cua Driver), checked every few seconds. */
 export type MacWin = { windowId: number; title: string; size?: { w: number; h: number }; marker?: { x: number; y: number; w: number; h: number } | null };
 export function useAppWindows(apps: string[]) {
   const [found, setFound] = useState<Record<string, { windowId?: number; title?: string; windows?: MacWin[] }>>({});
@@ -89,7 +89,7 @@ export function MacStream({
   const [video, setVideo] = useState<HTMLVideoElement | null>(null);
   const [failed, setFailed] = useState(false);
   // Captured at the size it's shown (in device pixels, in steps so small resizes don't restart it):
-  // macOS scales a window down cleanly, while shrinking a full-size stream in the page blurs small text.
+  // Windows scales a window down cleanly, while shrinking a full-size stream in the page blurs small text.
   const [box, setBox] = useState<{ w: number; h: number } | null>(null);
   useEffect(() => {
     if (!video) return;
@@ -137,7 +137,7 @@ export function MacStream({
   );
 }
 
-/** A window an app has on the Mac, live when the Mac app can stream it (else null, and the caller falls back). */
+/** A window an app has on the PC, live when the Windows app can stream it (else null, and the caller falls back). */
 export function useAppWindowSource(app: string) {
   const screens = useMacScreens(4000);
   const found = useAppWindows(screens?.access === "granted" ? [app] : []);
