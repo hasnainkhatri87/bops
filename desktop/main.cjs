@@ -292,6 +292,16 @@ function askNotify() {
 }
 
 function permStatus(id) {
+  if (win) {
+    if (id === "notifications") return notifyStatus();
+    if (id === "microphone") {
+      const status = systemPreferences.getMediaAccessStatus("microphone");
+      return status === "unknown" ? "not-determined" : status;
+    }
+    // Windows desktop capture and UI Automation do not use a macOS-style app grant.
+    if (id === "screen" || id === "accessibility") return "granted";
+    return "unknown";
+  }
   if (!mac) return id === "notifications" ? notifyStatus() : "granted";
   if (id === "screen") return screenStatus();
   if (id === "microphone") return systemPreferences.getMediaAccessStatus(id);
@@ -303,6 +313,15 @@ function permStatus(id) {
 ipcMain.handle("perm-status", () => Object.fromEntries(PERM_IDS.map((id) => [id, permStatus(id)])));
 ipcMain.handle("perm-request", async (_, id) => {
   if (!PERM_IDS.includes(id)) return "unknown";
+  if (win) {
+    if (id === "notifications") return askNotify();
+    if (id === "microphone") {
+      const status = permStatus(id);
+      if (status !== "granted") await shell.openExternal("ms-settings:privacy-microphone");
+      return status;
+    }
+    return "granted";
+  }
   if (!mac) return id === "notifications" ? askNotify() : "granted";
   if (id === "microphone") {
     await systemPreferences.askForMediaAccess("microphone").catch(() => false);
@@ -370,6 +389,7 @@ ipcMain.handle("mac-show-main", () => {
 
 app.setName("Bops");
 app.whenReady().then(() => {
+  if (win) app.setAppUserModelId("ai.orgo.bops");
   if (process.platform === "darwin" && fs.existsSync(ICON)) app.dock.setIcon(nativeImage.createFromPath(ICON));
   void createWindow();
   app.on("activate", () => BrowserWindow.getAllWindows().length === 0 && void createWindow());
