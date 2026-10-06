@@ -11,6 +11,8 @@ const path = require("node:path");
 
 const PORT = 3210;
 const URL = `http://localhost:${PORT}`;
+const win = process.platform === "win32";
+const mac = process.platform === "darwin";
 const REPO = (() => {
   try {
     return require("./repo.json").path;
@@ -26,10 +28,11 @@ let pipWin;
 
 /** Apps opened from Finder get a bare PATH; borrow the login shell's so node and codex resolve. */
 function loginPath() {
+  if (win) return process.env.PATH || "";
   try {
     return execFileSync(process.env.SHELL || "/bin/zsh", ["-ilc", 'printf %s "$PATH"'], { timeout: 5000 }).toString();
   } catch {
-    return process.env.PATH;
+    return process.env.PATH || "";
   }
 }
 
@@ -72,8 +75,18 @@ function packagedServer() {
     const st = fs.lstatSync(link, { throwIfNoEntry: false });
     if (st && !st.isSymbolicLink()) continue;
     if (st && fs.readlinkSync(link) === path.join(dir, name)) continue;
-    if (st) fs.unlinkSync(link);
-    fs.symlinkSync(path.join(dir, name), link);
+    if (st) fs.rmSync(link, { recursive: true, force: true });
+    if (win) {
+      const src = path.join(dir, name);
+      const kind = fs.statSync(src).isDirectory() ? "junction" : "file";
+      try { fs.symlinkSync(src, link, kind); }
+      catch {
+        if (kind === "junction") fs.cpSync(src, link, { recursive: true, force: true });
+        else fs.copyFileSync(src, link);
+      }
+    } else {
+      fs.symlinkSync(path.join(dir, name), link);
+    }
   }
   // Settings for this Mac (self-hosting, testing) go in ~/Library/Application Support/Bops/.env.local;
   // the app itself ships with no keys.
@@ -81,7 +94,7 @@ function packagedServer() {
   try {
     env = require("node:util").parseEnv(fs.readFileSync(path.join(app.getPath("userData"), ".env.local"), "utf8"));
   } catch {}
-  const relay = path.join(process.resourcesPath, "bin", "orgo-relay");
+  const relay = [path.join(process.resourcesPath, "bin", "orgo-relay.exe"), path.join(process.resourcesPath, "bin", "orgo-relay")].find((p) => fs.existsSync(p));
   // What the server prints, for support: ~/Library/Logs/Bops/server.log. Each start adds to it (an
   // earlier start's error is often the one that matters); it starts over once it passes 5 MB.
   fs.mkdirSync(app.getPath("logs"), { recursive: true });
@@ -89,7 +102,7 @@ function packagedServer() {
   const big = (fs.statSync(logFile, { throwIfNoEntry: false })?.size ?? 0) > 5 * 1024 * 1024;
   const log = fs.openSync(logFile, big ? "w" : "a");
   fs.writeSync(log, `\n--- Bops ${app.getVersion()} starting, ${new Date().toISOString()}\n`);
-  return { dir, home, log, env: { ...env, ...(fs.existsSync(relay) ? { BOPS_RELAY_BIN: relay } : {}) } };
+  return { dir, home, log, env: { ...env, ...(relay ? { BOPS_RELAY_BIN: relay } : {}) } };
 }
 
 async function startServer() {
@@ -121,13 +134,13 @@ async function startServer() {
           HOSTNAME: packaged.env.BOPS_LISTEN_ALL === "1" ? "0.0.0.0" : "127.0.0.1",
         },
         stdio: ["ignore", packaged.log, packaged.log],
-        detached: true,
+        detached: !win,
       })
-    : spawn("npx", ["next", "dev", "--port", String(PORT)], {
+    : spawn(win ? "npx.cmd" : "npx", ["next", "dev", "--port", String(PORT)], {
         cwd: REPO,
         env: { ...process.env, PATH: loginPath() },
         stdio: "ignore",
-        detached: true,
+        detached: !win,
       });
   for (let i = 0; i < 240 && !(await serverUp()); i++) await new Promise((r) => setTimeout(r, 500));
 }
@@ -135,28 +148,29 @@ async function startServer() {
 const splash = `data:text/html,${encodeURIComponent(`<body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;font:13px -apple-system,system-ui;color:#6B6B6B;-webkit-app-region:drag">Starting Bops…</body>`)}`;
 
 async function createWindow() {
-  const win = new BrowserWindow({
+  const options = {
     width: 1360,
     height: 860,
     minWidth: 1180,
     minHeight: 640,
     title: "Bops",
-    titleBarStyle: "hiddenInset",
-    trafficLightPosition: { x: 14, y: 14 },
     backgroundColor: "#FFFFFF",
     icon: ICON,
-    // Web pages open as tabs inside Bops (see components/app/panel-tabs.tsx). The preload lets the
-    // Your Mac tab show this Mac's screens and windows live (see components/app/mac-screens.tsx).
     webPreferences: { webviewTag: true, preload: path.join(__dirname, "preload.cjs") },
-  });
-  mainWin = win;
-  win.webContents.setWindowOpenHandler(({ url }) => {
+  };
+  if (mac) {
+    options.titleBarStyle = "hiddenInset";
+    options.trafficLightPosition = { x: 14, y: 14 };
+  }
+  const appWindow = new BrowserWindow(options);
+  mainWin = appWindow;
+  appWindow.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url);
     return { action: "deny" };
   });
-  await win.loadURL(splash);
+  await appWindow.loadURL(splash);
   await startServer();
-  await win.loadURL(URL);
+  await appWindow.loadURL(URL);
 }
 
 // A page in a tab that opens a new window opens it in your browser instead.
@@ -217,7 +231,9 @@ ipcMain.handle("mac-screens", async () => {
   const list = await desktopCapturer.getSources({ types: ["screen", "window"], thumbnailSize: { width: 0, height: 0 } });
   return { access, displays, bopsOn, sources: list.map((s) => ({ id: s.id, name: s.name, displayId: s.display_id || undefined })) };
 });
-ipcMain.handle("mac-screen-settings", () => shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"));
+ipcMain.handle("mac-screen-settings", () =>
+  win ? shell.openExternal("ms-settings:privacy-screenshots") : shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"),
+);
 
 /*
  * What Bops asks macOS for, all in one place (components/app/setup.tsx, and Settings → This Mac):
@@ -233,7 +249,6 @@ const PANES = {
   notifications: "x-apple.systempreferences:com.apple.preference.notifications",
 };
 const PERM_IDS = Object.keys(PANES);
-const mac = process.platform === "darwin";
 // macOS keeps the Screen Recording answer a process saw at launch: a grant made later only takes
 // effect after a restart. The status at launch tells the page when to offer one.
 const screenAtLaunch = mac ? systemPreferences.getMediaAccessStatus("screen") : "granted";
@@ -301,7 +316,13 @@ ipcMain.handle("perm-request", async (_, id) => {
   }
   return permStatus(id);
 });
-ipcMain.handle("perm-settings", (_, id) => (PANES[id] ? shell.openExternal(PANES[id]) : undefined));
+ipcMain.handle("perm-settings", (_, id) => {
+  if (win) {
+    const pages = { screen: "ms-settings:privacy-screenshots", microphone: "ms-settings:privacy-microphone", notifications: "ms-settings:notifications", accessibility: "ms-settings:easeofaccess" };
+    return pages[id] ? shell.openExternal(pages[id]) : undefined;
+  }
+  return PANES[id] ? shell.openExternal(PANES[id]) : undefined;
+});
 // Screen Recording was turned on after Bops started: it works once Bops restarts.
 ipcMain.handle("perm-screen-restart", () => mac && screenAtLaunch !== "granted" && systemPreferences.getMediaAccessStatus("screen") === "granted");
 // Stop the server first and wait for its port to close, so the new Bops starts its own instead of
@@ -331,7 +352,7 @@ ipcMain.handle("mac-pip-open", () => {
     fullscreenable: false,
     skipTaskbar: true,
     backgroundColor: "#F2F2F0",
-    title: "Your Mac",
+    title: win ? "Your PC" : "Your Mac",
     webPreferences: { preload: path.join(__dirname, "preload.cjs") },
   });
   pipWin.setAlwaysOnTop(true, "floating");
@@ -360,12 +381,13 @@ app.on("window-all-closed", () => app.quit());
 function stopServer() {
   if (!server) return false;
   try {
-    process.kill(-server.pid);
+    if (win) execFileSync("taskkill", ["/PID", String(server.pid), "/T", "/F"], { windowsHide: true });
+    else process.kill(-server.pid);
   } catch {}
   server = undefined;
-  try {
-    execFileSync("pkill", ["-f", ".bops/chrome/"]);
-  } catch {}
+  if (!win) {
+    try { execFileSync("pkill", ["-f", ".bops/chrome/"]); } catch {}
+  }
   return true;
 }
 
