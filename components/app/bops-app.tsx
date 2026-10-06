@@ -10,7 +10,7 @@ import { ComputerPeek, ComputerView, defaultDisplay } from "./computer";
 import { BusyBots, Mascot } from "./mascot";
 import { CHAT_TAB, hostOf, NewTab, OpenLink, TabBar, WebTab, type PanelTab } from "./panel-tabs";
 
-/** The tabs open from the start besides the computer: your Mac, and the chat's bot's profile. */
+/** The tabs open from the start besides the computer: your PC, and the chat's bot's profile. */
 const MAC_TAB = "tab_mac";
 const PROFILE_TAB = "tab_profile";
 import { Sidebar } from "./sidebar";
@@ -64,7 +64,7 @@ function chime() {
  * Bops asks who you are first: nobody signed in with Orgo means the sign-in screen (sign-in.tsx),
  * unless this is a self-hosted install running on its own Orgo key. Signing out anywhere clears the
  * state's account, which checks again and brings the sign-in screen back. Once signed in it's the app
- * right away: what this Mac still needs (setup.tsx) waits behind a badge on the account menu.
+ * right away: what this PC still needs (setup.tsx) waits behind a badge on the account menu.
  */
 export function BopsApp() {
   const state = useAppState();
@@ -80,19 +80,19 @@ function Bops({ state }: { state: AppState | null }) {
   const [composing, setComposing] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
   const [focus, setFocus] = useState(false);
-  // Full width shows your Mac instead of a bot's computer.
+  // Full width shows your PC instead of a bot's computer.
   const [macFocus, setMacFocus] = useState(false);
   // The right side's tabs (the chat's own computer is always first; see panel-tabs.tsx).
-  // Open from the start: your Mac, the chat's bot's profile (it follows the chat, like the computer tab), and a new tab.
+  // Open from the start: your PC, the chat's bot's profile (it follows the chat, like the computer tab), and a new tab.
   const [openTabs, setTabs] = useState<PanelTab[]>([
     { id: MAC_TAB, kind: "mac" },
     { id: PROFILE_TAB, kind: "bot", botId: "", section: "details" },
     { id: "tab_new", kind: "new" },
   ]);
-  // The work the panel last followed ("thread:where"), so it switches between your Mac and the bot's
+  // The work the panel last followed ("thread:where"), so it switches between your PC and the bot's
   // computer only when that changes, and a tab you picked stays until it does.
   const [followed, setFollowed] = useState("");
-  // The popped-out Mac previews ask for the Your Mac tab by bumping a key in local storage.
+  // The popped-out Mac previews ask for the Your PC tab by bumping a key in local storage.
   const openMacRef = useRef<() => void>(() => {});
   useEffect(() => {
     const onStorage = (e: StorageEvent) => e.key === OPEN_MAC_KEY && openMacRef.current();
@@ -109,7 +109,7 @@ function Bops({ state }: { state: AppState | null }) {
   // Heads-ups already brought forward (null until the first state arrives), and the way back.
   const [cutAlerts, setCutAlerts] = useState<Set<string> | null>(null);
   const [cutBack, setCutBack] = useState<{ name: string; back: string } | null>(null);
-  // Your Mac's live view, kept while hidden: macHeldAt is 0 while it's showing, 1 while held, 2 once let go.
+  // Your PC's live view, kept while hidden: macHeldAt is 0 while it's showing, 1 while held, 2 once let go.
   const [macHeldAt, setMacHeldAt] = useState(0);
   const [macWasShown, setMacWasShown] = useState(false);
   useEffect(() => {
@@ -222,7 +222,7 @@ function Bops({ state }: { state: AppState | null }) {
     .filter((t) => !("botId" in t) || state.bots.some((b) => b.id === t.botId));
   const tab = active === CHAT_TAB ? undefined : tabs.find((t) => t.id === active);
 
-  // Where the chat's bot is working now: on your Mac or on its own computer. When that changes (a
+  // Where the chat's bot is working now: on your PC or on its own computer. When that changes (a
   // task starts, or moves), the panel shows it, unless you're reading something (a page, the Vault).
   const lead = state.sessions.filter((s) => s.botId === chatBotId && live(s) && s.runsOn && !s.askWhere).at(-1);
   const leadKey = lead ? `${lead.id}:${lead.runsOn}` : "";
@@ -311,7 +311,7 @@ function Bops({ state }: { state: AppState | null }) {
     setPanelOpen(true);
   };
 
-  /** Show a watched thing: its Mac window in Your Mac, or the bot's screen it's on. Seeing it clears its news. */
+  /** Show a watched thing: its Mac window in Your PC, or the bot's screen it's on. Seeing it clears its news. */
   const showWatch = (w: Watch) => {
     if (w.mac) openMac();
     else {
@@ -356,7 +356,7 @@ function Bops({ state }: { state: AppState | null }) {
     setComposing(false);
     setFocus(false);
     setThreadId(s.id);
-    // A thread on your Mac shows your Mac; one in the cloud, the bot's computer.
+    // A thread on your PC shows your PC; one in the cloud, the bot's computer.
     if (s.runsOn === "mac") {
       if (!openTabs.some((t) => t.id === MAC_TAB)) setTabs([...openTabs, { id: MAC_TAB, kind: "mac" }]);
       setActive(MAC_TAB);
@@ -496,7 +496,7 @@ function Bops({ state }: { state: AppState | null }) {
                   ) : tab?.kind === "vault" ? (
                     <VaultTab state={state} />
                   ) : null}
-                  {/* Your Mac stays capturing, hidden, for two minutes after you leave it (restarting capture is slow). */}
+                  {/* Your PC stays capturing, hidden, for two minutes after you leave it (restarting capture is slow). */}
                   {(showingMac || macHeld) && (
                     <div className={`min-h-0 flex-1 flex-col px-5 pb-4 pt-4 ${showingMac ? "flex" : "hidden"}`}>
                       <MacComputer
@@ -552,7 +552,7 @@ function Bops({ state }: { state: AppState | null }) {
           />
         )}
         {setup && <Setup state={state} onClose={() => setSetup(false)} />}
-        {/* What bots are doing on the user's Mac, live, in the corner (hidden while the Your Mac tab is open). */}
+        {/* What bots are doing on the user's Mac, live, in the corner (hidden while the Your PC tab is open). */}
         {!(tab?.kind === "mac" && panelOpen) && <MacPreviews state={state} onOpen={openMac} />}
       </div>
     </OpenLink.Provider>
@@ -883,7 +883,7 @@ const radio = (on: boolean) =>
 const computerNow = (state: AppState, b: AppState["bots"][number]) => {
   const c = workBot(b, state.bots);
   if (state.host !== "mac" && c.id !== b.id) return `Works on ${c.name}'s computer`;
-  return state.host === "mac" ? "Uses this Mac" : b.computerStatus === "ready" ? "Ready" : b.computerStatus === "cloning" ? "Setting up" : b.computerStatus === "none" ? "Set up on its first task" : "Couldn't be set up yet";
+  return state.host === "mac" ? "Uses this PC" : b.computerStatus === "ready" ? "Ready" : b.computerStatus === "cloning" ? "Setting up" : b.computerStatus === "none" ? "Set up on its first task" : "Couldn't be set up yet";
 };
 
 /**
@@ -905,7 +905,7 @@ function SelfHosting({ state }: { state: AppState }) {
         <div className="flex gap-2.5">
           <div className={`flex flex-1 flex-col gap-1.5 rounded-[14px] p-3.5 ${option(!tailnet)}`}>
             <span className="flex items-center justify-between">
-              <span className="text-[14px] font-semibold">{state.host === "mac" ? "Direct on this Mac" : "Through Orgo"}</span>
+              <span className="text-[14px] font-semibold">{state.host === "mac" ? "Direct on this PC" : "Through Orgo"}</span>
               {radio(!tailnet)}
             </span>
             <span className="text-[12.5px] leading-[18px] text-[#3A3A38]">
@@ -934,7 +934,7 @@ function SelfHosting({ state }: { state: AppState }) {
         {state.bots.map((b) => (
           <div key={b.id} className="flex items-center border-b border-[#F0F0EE] py-2 last:border-0">
             <span className="w-[200px] text-[13px] font-medium">{b.name}</span>
-            <span className="font-mono text-[12px] text-[#3A3A38]">{state.host === "mac" ? "this Mac" : b.computerId ? `${b.computerId}${b.tailnet ? ` · ${b.tailnet.ip}` : ""}` : sharesComputer(b) ? `shares ${workBot(b, state.bots).name}'s` : "none yet"}</span>
+            <span className="font-mono text-[12px] text-[#3A3A38]">{state.host === "mac" ? "this PC" : b.computerId ? `${b.computerId}${b.tailnet ? ` · ${b.tailnet.ip}` : ""}` : sharesComputer(b) ? `shares ${workBot(b, state.bots).name}'s` : "none yet"}</span>
           </div>
         ))}
       </div>
@@ -951,7 +951,7 @@ function Settings({ state, onClose }: { state: AppState; onClose: () => void }) 
         <div className="flex items-center justify-between border-b border-[#F0F0EE] px-[22px] py-[18px]">
           <div className="flex flex-col gap-0.5">
             <span className="text-[18px] font-semibold leading-[22px]">Settings</span>
-            <span className="text-[13px] leading-[17px] text-[#6B6B6B]">You, how your bots reach you, this Mac, and where your bots work</span>
+            <span className="text-[13px] leading-[17px] text-[#6B6B6B]">You, how your bots reach you, this PC, and where your bots work</span>
           </div>
           <button onClick={onClose} aria-label="Close" className="flex size-8 items-center justify-center rounded-full shadow-[0_0_0_1px_#E6E6E3]">
             <svg width="12" height="12" viewBox="0 0 12 12">
@@ -970,11 +970,11 @@ function Settings({ state, onClose }: { state: AppState; onClose: () => void }) 
             {(["orgo", "mac"] as const).map((h) => (
               <button key={h} onClick={() => setHost(h)} className={`flex flex-1 flex-col gap-1.5 rounded-[14px] p-3.5 text-left ${option(state.host === h)}`}>
                 <span className="flex items-center justify-between">
-                  <span className="text-[14px] font-semibold">{h === "orgo" ? "Their own cloud computers" : "This Mac"}</span>
+                  <span className="text-[14px] font-semibold">{h === "orgo" ? "Their own cloud computers" : "This PC"}</span>
                   {radio(state.host === h)}
                 </span>
                 <span className="text-[12.5px] leading-[18px] text-[#6B6B6B]">
-                  {h === "orgo" ? "Recommended. Your bots work on a computer in the cloud, with 4 screens, and keep working when your Mac is closed. A bot can have one of its own." : "Bots work in background browsers on this Mac, from your own internet connection."}
+                  {h === "orgo" ? "Recommended. Your bots work on a computer in the cloud, with 4 screens, and keep working when your PC is closed. A bot can have one of its own." : "Bots work in background browsers on this PC, from your own internet connection."}
                 </span>
               </button>
             ))}
