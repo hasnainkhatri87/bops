@@ -30,10 +30,12 @@ jobs:
         run: |
           Add-Type -AssemblyName System.Drawing
           Add-Type -AssemblyName UIAutomationClient
-          $plain = [Text.Encoding]::UTF8.GetBytes("bops-dpapi-smoke")
-          $sealed = [Security.Cryptography.ProtectedData]::Protect($plain, $null, [Security.Cryptography.DataProtectionScope]::CurrentUser)
-          $opened = [Security.Cryptography.ProtectedData]::Unprotect($sealed, $null, [Security.Cryptography.DataProtectionScope]::CurrentUser)
-          if ([Text.Encoding]::UTF8.GetString($opened) -ne "bops-dpapi-smoke") { throw "DPAPI round-trip failed" }
+          $secure = ConvertTo-SecureString "bops-dpapi-smoke" -AsPlainText -Force
+          $sealed = ConvertFrom-SecureString $secure
+          $openedSecure = ConvertTo-SecureString $sealed
+          $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($openedSecure)
+          try { $opened = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }
+          if ($opened -ne "bops-dpapi-smoke") { throw "DPAPI-backed SecureString round-trip failed" }
 
       - run: npm run build
 
