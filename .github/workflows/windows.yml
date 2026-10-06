@@ -27,7 +27,7 @@ jobs:
       - run: npm run build
 
       - name: Build Windows installer and portable EXE
-        run: npx electron-builder --win nsis portable --x64
+        run: npx electron-builder --win nsis portable --x64 --publish never
 
       - name: Create SHA256 checksums
         shell: powershell
