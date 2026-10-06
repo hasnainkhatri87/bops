@@ -73,8 +73,10 @@ function packagedServer() {
     if (name === ".data" || name.startsWith(".env")) continue;
     const link = path.join(home, name);
     const st = fs.lstatSync(link, { throwIfNoEntry: false });
-    if (st && !st.isSymbolicLink()) continue;
-    if (st && fs.readlinkSync(link) === path.join(dir, name)) continue;
+    // macOS keeps an existing real file alone. On Windows a real file/directory may be our
+    // symlink-permission fallback copy from an older app version, so refresh it from this build.
+    if (st && !st.isSymbolicLink() && !win) continue;
+    if (st && st.isSymbolicLink() && fs.readlinkSync(link) === path.join(dir, name)) continue;
     if (st) fs.rmSync(link, { recursive: true, force: true });
     if (win) {
       const src = path.join(dir, name);
@@ -88,7 +90,7 @@ function packagedServer() {
       fs.symlinkSync(path.join(dir, name), link);
     }
   }
-  // Settings for this Mac (self-hosting, testing) go in ~/Library/Application Support/Bops/.env.local;
+  // Per-machine self-hosting/testing settings live in the platform's Bops user-data folder as .env.local;
   // the app itself ships with no keys.
   let env = {};
   try {
