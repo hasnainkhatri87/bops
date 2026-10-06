@@ -5,6 +5,9 @@ import { currentPage } from "./local";
 import { sameComputer, screenEndpoint, workComputer } from "./screens";
 import { bot, getState, ownerName } from "./store";
 
+const WINDOWS = process.platform === "win32";
+const LOCAL_DEVICE = WINDOWS ? "PC" : "Mac";
+
 /**
  * A bot's computer, in a few lines, for the bot itself: what each screen is doing (its threads,
  * its helpers, a watched site, the user in control, or what's open on a free one), what's waiting on
@@ -87,7 +90,7 @@ export async function computerBriefing(botId: string, opts: { thread?: string } 
 
   const ownersMac = await macBriefing(botId);
   return [
-    `${shared ? `The computer you share with ${c.name}` : "Your computer"}${mac ? ` (browsers on ${owner}'s Mac)` : ""}, as of now:`,
+    `${shared ? `The computer you share with ${c.name}` : "Your computer"}${mac ? ` (browsers on ${owner}'s ${LOCAL_DEVICE})` : ""}, as of now:`,
     ...lines,
     ...(waiting.length ? [`Waiting on ${owner}: ${waiting.join("; ")}.`] : []),
     ...(queued.length ? [`Up next: ${queued.join(", ")}.`] : []),
@@ -99,33 +102,63 @@ export async function computerBriefing(botId: string, opts: { thread?: string } 
 const run = (cmd: string, args: string[]) =>
   new Promise<string>((resolve) => execFile(cmd, args, { timeout: 1500 }, (_e, out) => resolve(String(out ?? "").trim())));
 
-/** The user's own Mac, when bots can work there: ready or not, what they're in, what's allowed, what's running. */
+/** The user's own local computer, when bots can work there: readiness, activity and watched windows. */
+async function foregroundApp() {
+  if (!WINDOWS)
+    return run("/usr/bin/lsappinfo", ["info", "-only", "name", "front"]).then(
+      (o) => /"LSDisplayName"="([^"]+)"/.exec(o)?.[1] ?? /"name"="([^"]+)"/i.exec(o)?.[1] ?? "",
+    );
+  const script = String.raw`
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public static class BopsForeground {
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+}
+"@
+$h=[BopsForeground]::GetForegroundWindow()
+$pid=[uint32]0
+[void][BopsForeground]::GetWindowThreadProcessId($h,[ref]$pid)
+try {
+  $p=Get-Process -Id $pid -ErrorAction Stop
+  $name=$p.ProcessName
+  try { if ($p.MainModule.FileVersionInfo.FileDescription) { $name=$p.MainModule.FileVersionInfo.FileDescription } } catch {}
+  $name
+} catch {}
+`;
+  return run("powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script]);
+}
+
+async function screenLocked() {
+  if (!WINDOWS) return run("/usr/sbin/ioreg", ["-n", "Root", "-d1"]).then((o) => /CGSSessionScreenIsLocked"=Yes/.test(o));
+  return run("powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "if (Get-Process LogonUI -ErrorAction SilentlyContinue) { 'locked' }"]).then(
+    (o) => o === "locked",
+  );
+}
+
 async function macBriefing(botId: string) {
   const state = getState();
   const m = state.mac;
   const owner = ownerName();
-  // Windows on the user's Mac that Jev watches for them (they work whether or not bots can use the Mac).
   const watched = (state.watches ?? []).filter((w) => w.mac);
   const ago = (t?: number) => (t ? `${Math.max(1, Math.round((Date.now() - t) / 60_000))} min ago` : "not yet");
   const watching = watched.length
-    ? `Windows watched on ${owner}'s Mac (${watched.length}; Bops reads each when it changes, and ${bot(watched[0].botId)?.name ?? "the main bot"} gives the heads-up): ${watched
+    ? `Windows watched on ${owner}'s ${LOCAL_DEVICE} (${watched.length}; Bops reads each when it changes, and ${bot(watched[0].botId)?.name ?? "the main bot"} gives the heads-up): ${watched
         .map((w) => `"${w.mac!.title}" in ${w.mac!.app}, for ${w.lookFor}, last read ${ago(w.readAt)}${w.away ? ", paused: the window shows something else right now" : ""}${w.alert ? `, waiting for ${owner}: "${w.alert.text}"` : ""}`)
         .join("; ")}.`
-    : `No windows on ${owner}'s Mac are being watched.`;
+    : `No windows on ${owner}'s ${LOCAL_DEVICE} are being watched.`;
   if (!m) return watching;
-  if (!m.ready) return [`${owner}'s Mac: not available to bots (${m.reason ?? "not set up"}).`, watching].join("\n");
-  // What the user is doing right now, so work on their Mac stays out of their way.
-  const [front, locked] = await Promise.all([
-    run("/usr/bin/lsappinfo", ["info", "-only", "name", "front"]).then((o) => /"LSDisplayName"="([^"]+)"/.exec(o)?.[1] ?? /"name"="([^"]+)"/i.exec(o)?.[1] ?? ""),
-    run("/usr/sbin/ioreg", ["-n", "Root", "-d1"]).then((o) => /CGSSessionScreenIsLocked"=Yes/.test(o)),
-  ]);
-  const onMac = state.sessions.filter((s) => s.runsOn === "mac" && live(s));
-  const yours = onMac.filter((s) => s.botId === botId);
+  if (!m.ready) return [`${owner}'s ${LOCAL_DEVICE}: not available to bots (${m.reason ?? "not set up"}).`, watching].join("\n");
+
+  const [front, locked] = await Promise.all([foregroundApp(), screenLocked()]);
+  const local = state.sessions.filter((x) => x.runsOn === "mac" && live(x));
+  const yours = local.filter((x) => x.botId === botId);
   return [
-    `${owner}'s Mac: available through computer use${locked ? " (screen locked)" : front ? `; ${owner} is in ${front} right now` : ""}.`,
+    `${owner}'s ${LOCAL_DEVICE}: available through computer use${locked ? " (screen locked)" : front ? `; ${owner} is in ${front} right now` : ""}.`,
     `Apps bots may always use there: ${m.alwaysApps.length ? m.alwaysApps.join(", ") : `none yet (${owner} approves each app the first time)`}.`,
-    ...(yours.length ? [`Your tasks on ${owner}'s Mac: ${yours.map((s) => `"${s.title}"${s.activity ? ` (${s.activity})` : ""}`).join("; ")}.`] : []),
-    ...(onMac.length > yours.length ? [`Other bots are working on ${owner}'s Mac too (${onMac.length - yours.length}).`] : []),
+    ...(yours.length ? [`Your tasks on ${owner}'s ${LOCAL_DEVICE}: ${yours.map((x) => `"${x.title}"${x.activity ? ` (${x.activity})` : ""}`).join("; ")}.`] : []),
+    ...(local.length > yours.length ? [`Other bots are working on ${owner}'s ${LOCAL_DEVICE} too (${local.length - yours.length}).`] : []),
     ...(m.approvals.length ? [`Waiting on ${owner}'s OK: ${m.approvals.map((a) => a.message).join("; ")}.`] : []),
     watching,
   ].join("\n");
@@ -143,7 +176,7 @@ export function teamBriefing(mainId: string) {
   if (!others.length) return "Your team: just you so far.";
   const now = Date.now();
   const owner = ownerName();
-  const where = (s: Session) => (s.runsOn === "mac" ? `on ${owner}'s Mac` : s.askWhere ? `waiting for ${owner} to pick Mac or cloud` : "in the cloud");
+  const where = (s: Session) => (s.runsOn === "mac" ? `on ${owner}'s ${LOCAL_DEVICE}` : s.askWhere ? `waiting for ${owner} to pick ${LOCAL_DEVICE} or cloud` : "in the cloud");
   const lines = others.map((b) => {
     const mine = state.sessions.filter((s) => s.botId === b.id);
     const running = mine.filter(live);
@@ -158,7 +191,7 @@ export function teamBriefing(mainId: string) {
     const c = workComputer(b);
     const computer = c.id !== b.id ? "Works on your computer." : c.computerStatus === "ready" ? "" : c.computerStatus === "cloning" ? "Its computer is being set up." : "No computer yet.";
     return [
-      `- ${b.name} (${b.role}${b.runsOn && b.runsOn !== "auto" ? `, works on ${b.runsOn === "mac" ? `${owner}'s Mac` : "the cloud"}` : ""}):`,
+      `- ${b.name} (${b.role}${b.runsOn && b.runsOn !== "auto" ? `, works on ${b.runsOn === "mac" ? `${owner}'s ${LOCAL_DEVICE}` : "the cloud"}` : ""}):`,
       doing.length ? `working on ${doing.join("; ")}.` : "free.",
       watching.length ? `Watching ${watching.join(", ")}.` : "",
       alerts.length ? `Waiting on ${owner}: ${alerts.join("; ")}.` : "",
