@@ -164,7 +164,7 @@ class Codex {
       // Low-stakes for this task (looking at Calculator, Notes, a setting): allowed without asking,
       // just this once, and said so in the chat. Apps where using them at all can mean talking to
       // someone (Messages, Mail, Slack…) always ask: on the PC an app is allowed as a whole.
-      if (app && session && !TALKING_APPS.test(app) && (await lowRisk(`Use the ${app} app on ${ownerName()}'s Mac`, `task: ${session.goal.slice(0, 500)}`))) {
+      if (app && session && !TALKING_APPS.test(app) && (await lowRisk(`Use the ${app} app on ${ownerName()}'s ${WINDOWS ? "PC" : "Mac"}`, `task: ${session.goal.slice(0, 500)}`))) {
         addMessage({ chatId: session.chatId, role: "system", text: `${bot(session.botId)?.name ?? "A bot"} used ${app} on your PC · low risk for this task, so didn't ask`, sessionIds: [session.id] });
         return this.respond(m.id!, { action: "accept", content: {} });
       }
