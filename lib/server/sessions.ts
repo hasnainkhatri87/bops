@@ -1035,7 +1035,7 @@ const friendlyApp = (name: string) => {
     excel: "Excel",
     powerpnt: "PowerPoint",
     outlook: "Outlook",
-    ms-teams: "Teams",
+    "ms-teams": "Teams",
     teams: "Teams",
   };
   return map[name.toLowerCase()] ?? name;
