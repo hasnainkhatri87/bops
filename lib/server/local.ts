@@ -6,9 +6,10 @@ import { join } from "node:path";
 import { DISPLAYS } from "@/lib/types";
 import { executorKey } from "./cloud";
 import { mirroredTarget } from "./mirror";
+import { codexPath, findCodex } from "./codex-cli";
 
 /**
- * Local Mac host. Each bot's "screen" is its own background Chrome on the user's Mac, with its own
+ * Local Windows host. Each bot's "screen" is its own background Chrome on the user's PC, with its own
  * profile and debugging port, so sessions browse from their home IP instead of a datacenter.
  * It runs headless (no windows on their screen; the app's live view shows it) and the agent
  * drives it through Playwright MCP over CDP, so it never takes their mouse.
@@ -89,7 +90,7 @@ export async function ensureChrome(botId: string, port: number) {
 export const asNode = process.env.ELECTRON_RUN_AS_NODE === "1";
 
 /**
- * The environment for Codex, whose agent runs the user's own commands on this Mac: the server's,
+ * The environment for Codex, whose agent runs the user's own commands on this PC: the server's,
  * minus what only makes the server run. ELECTRON_RUN_AS_NODE would make any Electron app the agent
  * starts by its binary run as Node instead, and NODE_ENV=production would make `npm install` skip
  * dev dependencies.
@@ -99,7 +100,7 @@ export function agentEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv 
   return Object.fromEntries(Object.entries({ ...process.env, ...extra }).filter(([k]) => !SERVER_ONLY_ENV.has(k))) as NodeJS.ProcessEnv;
 }
 
-/** The agent's browser tools for one screen, run by the executor on this Mac. */
+/** The agent's browser tools for one screen, run by the executor on this PC. */
 export const browserMcp = (port: number) => {
   const args = [PLAYWRIGHT_MCP, "--cdp-endpoint", `http://127.0.0.1:${port}`];
   // The executor's environment doesn't carry ELECTRON_RUN_AS_NODE (agentEnv), so it's set here.
@@ -114,10 +115,13 @@ export const browserMcp = (port: number) => {
 export async function startExecutor(envId: string, remoteUrl: string, port: number): Promise<ChildProcess> {
   mkdirSync(join(WORKSPACE, "capabilities/skills"), { recursive: true });
   const key = await executorKey();
-  const child = spawn("codex", ["exec-server", "--remote", remoteUrl, "--environment-id", envId], {
+  const bin = findCodex();
+  if (!bin) throw new Error("Codex isn't installed yet.");
+  const child = spawn(bin, ["exec-server", "--remote", remoteUrl, "--environment-id", envId], {
     cwd: WORKSPACE,
-    env: agentEnv({ CODEX_API_KEY: key, BOPS_CDP_PORT: String(port) }),
+    env: agentEnv({ CODEX_API_KEY: key, BOPS_CDP_PORT: String(port), PATH: codexPath() }),
     stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
   });
   return new Promise((resolve, reject) => {
     let log = "";
@@ -141,7 +145,7 @@ export async function startExecutor(envId: string, remoteUrl: string, port: numb
   });
 }
 
-/** A screen's Chrome: a port on this Mac, or "host:port" anywhere reachable (an Orgo computer on the tailnet). */
+/** A screen's Chrome: a port on this PC, or "host:port" anywhere reachable (an Orgo computer on the tailnet). */
 export type Endpoint = number | string;
 const hostPort = (ep: Endpoint) => (typeof ep === "number" ? `127.0.0.1:${ep}` : ep);
 
