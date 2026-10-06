@@ -34,7 +34,7 @@ import { recordTokens } from "./usage";
  * Session runner. A session is one long-running task on one screen of the computer its bot works on
  * (its own, or the main bot's when it shares; see workComputer in screens.ts),
  * shown in the app as a thread. OpenAI's Agents API runs the agent loop (self_hosted environment)
- * and `codex exec-server` runs its tools: on the user's Mac, Playwright MCP drives the screen's Chrome
+ * and `codex exec-server` runs its tools: on the user's PC, Playwright MCP drives the screen's Chrome
  * window; on an Orgo computer, the executor is pinned to the screen's X display and the screen MCP
  * drives it. Each reply the user leaves in the thread becomes the agent's next turn.
  */
@@ -46,6 +46,8 @@ const HARD_MODEL = process.env.BOPS_HARD_MODEL ?? "gpt-6-astra";
 /** Helpers a thread can run at once, each on its own screen (a bot has 4). */
 const MAX_HELPERS = 3;
 const TURN_TIMEOUT_MS = 10 * 60_000;
+const WINDOWS = process.platform === "win32";
+const LOCAL_DEVICE = WINDOWS ? "PC" : "Mac";
 
 /** Sessions the user stopped (or took over), and how to interrupt each one that's mid-turn. */
 const stopped = new Set<string>();
@@ -58,11 +60,11 @@ type StartOptions = {
   chatId?: string;
   sentVia?: Session["sentVia"];
   onWatch?: string;
-  /** Where to run it: the user's Mac, the cloud, or (auto) let Bops decide. */
+  /** Where to run it: the user's PC, the cloud, or (auto) let Bops decide. */
   where?: "mac" | "cloud" | "auto";
-  /** A last step for the user's Mac once this (cloud) part is done. */
+  /** A last step for the user's PC once this (cloud) part is done. */
   thenOnMac?: string;
-  /** Start a new thread even if one is already doing this job (moving a job to the Mac does). */
+  /** Start a new thread even if one is already doing this job (moving a job to the PC does). */
   fresh?: boolean;
 };
 
@@ -110,7 +112,7 @@ async function sameJobByMeaning(s: Session) {
   return pick && pick.choice !== "different" && pick.confidence >= 0.8 ? open.find((x) => x.id === pick.choice) : undefined;
 }
 
-/** The same job asked again: it goes to the thread doing it (or that thread moves to the Mac). */
+/** The same job asked again: it goes to the thread doing it (or that thread moves to the PC). */
 function foldInto(s: Session, goal: string, where: "mac" | "cloud" | "auto"): Session {
   const toMac = (where === "mac" || MAC_WORDS.test(goal)) && s.runsOn !== "mac" && !!getState().mac?.ready;
   if (toMac) return moveToMac(s.id, goal === s.goal ? undefined : goal);
@@ -175,8 +177,8 @@ async function route(sessionId: string, where: "mac" | "cloud" | "auto") {
   // There is no Mac to run on: say why, and run in the cloud unless the user asked for their Mac.
   if (to === "mac" && !getState().mac?.ready) {
     if (where === "mac") {
-      patchSession(sessionId, { routing: false, status: "failed", error: getState().mac?.reason ?? "Your Mac isn't set up for bots yet", endedAt: Date.now() });
-      addMessage({ chatId: s.chatId, role: "bot", botId: s.botId, text: `I can't work on your Mac yet: ${getState().mac?.reason ?? "it isn't set up"}`, sessionIds: [sessionId], resultOf: sessionId });
+      patchSession(sessionId, { routing: false, status: "failed", error: getState().mac?.reason ?? "Your PC isn't set up for bots yet", endedAt: Date.now() });
+      addMessage({ chatId: s.chatId, role: "bot", botId: s.botId, text: `I can't work on your PC yet: ${getState().mac?.reason ?? "it isn't set up"}`, sessionIds: [sessionId], resultOf: sessionId });
       return;
     }
     to = "cloud";
@@ -193,7 +195,7 @@ async function route(sessionId: string, where: "mac" | "cloud" | "auto") {
   }
   if (to === "ask") {
     patchSession(sessionId, { routing: false, askWhere: true });
-    addMessage({ chatId: s.chatId, role: "bot", botId: s.botId, text: `Should I do this on your Mac or in the cloud?`, sessionIds: [sessionId] });
+    addMessage({ chatId: s.chatId, role: "bot", botId: s.botId, text: `Should I do this on your PC or in the cloud?`, sessionIds: [sessionId] });
     return;
   }
   patchSession(sessionId, { routing: false, runsOn: to });
@@ -208,17 +210,17 @@ export function setWhere(sessionId: string, to: "mac" | "cloud") {
   void pump();
 }
 
-/** A cloud thread hit something only the user's Mac can get past: try the same task there, with what happened so far. */
+/** A cloud thread hit something only the user's PC can get past: try the same task there, with what happened so far. */
 export function moveToMac(sessionId: string, also?: string) {
   const s = session(sessionId);
   if (!s) throw new Error("no such thread");
-  if (!getState().mac?.ready) throw new Error(getState().mac?.reason ?? "your Mac isn't set up for bots yet");
-  if (live(s)) stopSession(sessionId, "Moved to your Mac");
-  // Already being done on the Mac: this copy steps aside for that one.
+  if (!getState().mac?.ready) throw new Error(getState().mac?.reason ?? "your PC isn't set up for bots yet");
+  if (live(s)) stopSession(sessionId, "Moved to your PC");
+  // Already being done on the PC: this copy steps aside for that one.
   const there = getState().sessions.find((x) => x.id !== s.id && x.botId === s.botId && x.runsOn === "mac" && live(x) && norm(x.title) === norm(s.title));
   const why = s.blocker ? `In the cloud it got stuck: ${BLOCKER_LABEL[s.blocker]}.` : s.error ? `In the cloud it didn't finish: ${s.error}.` : s.answer ? `In the cloud it ended with: ${s.answer.slice(0, 400)}` : "";
   const next =
-    there ?? startSession({ botId: s.botId, goal: [s.goal, why, also, "Do it on the Mac this time."].filter(Boolean).join("\n\n"), title: s.title, chatId: s.chatId, sentVia: s.sentVia, where: "mac", fresh: true });
+    there ?? startSession({ botId: s.botId, goal: [s.goal, why, also, "Do it on the PC this time."].filter(Boolean).join("\n\n"), title: s.title, chatId: s.chatId, sentVia: s.sentVia, where: "mac", fresh: true });
   patchSession(sessionId, { replacedBy: next.id, blocker: undefined, waitingOnYou: false });
   repoint(sessionId, next.id);
   return next;
@@ -231,7 +233,7 @@ export function stopSession(sessionId: string, reason = "Stopped by you") {
   stopped.add(sessionId);
   if (s.status === "queued") patchSession(sessionId, { status: "failed", error: reason, endedAt: Date.now() });
   interrupts.get(sessionId)?.();
-  // On the user's Mac, Codex can always be told directly (the ids are saved on the thread).
+  // On the user's PC, Codex can always be told directly (the ids are saved on the thread).
   if (s.runsOn === "mac" && s.codexThread && s.codexTurn) void codex.request("turn/interrupt", { threadId: s.codexThread, turnId: s.codexTurn }).catch(() => {});
 }
 
@@ -271,7 +273,7 @@ async function pump() {
     for (const s of getState().sessions.filter((x) => x.status === "queued" && !x.routing && !x.askWhere && !stopped.has(x.id) && (notBefore.get(x.id) ?? 0) <= Date.now())) {
       const b = bot(s.botId);
       if (!b) continue;
-      // On the user's Mac: no screens to share out, a few at a time (Codex works in the background).
+      // On the user's PC: no screens to share out, a few at a time (Codex works in the background).
       if (s.runsOn === "mac") {
         if (getState().sessions.filter((x) => x.runsOn === "mac" && (x.status === "starting" || x.status === "running")).length >= MAX_MAC) continue;
         patchSession(s.id, { status: "starting", startedAt: s.startedAt ?? Date.now() });
@@ -408,7 +410,7 @@ export async function ensureComputer(botId: string): Promise<void> {
     await ensureTailnet(b, true).catch(() => null);
     // A fork also arrives dressed as its parent; make it look like this bot's own computer.
     await applyDesktop(b).catch((e: Error) => console.warn(`[desktop] ${b.id}: ${e.message}`));
-    // Routing through the user's Mac is on: this computer joins it.
+    // Routing through the user's PC is on: this computer joins it.
     if (!swapped()) relayNewComputer();
   } catch (e) {
     if (swapped()) return;
@@ -829,7 +831,7 @@ async function run(sessionId: string) {
   try {
     // Out of AI credit: it doesn't start (the chat shows that, with Upgrade).
     if (await creditsOut()) throw outOfCreditError();
-    step(sessionId, "setup", mac ? "Getting a browser ready on your Mac" : "Getting the computer ready");
+    step(sessionId, "setup", mac ? "Getting a browser ready on your PC" : "Getting the computer ready");
     if (mac) await ensureChrome(b.id, port);
     else {
       await ensureScreen(computerId, display);
@@ -868,7 +870,7 @@ async function run(sessionId: string) {
           // Reasoning summaries become the thread's live caption ("checking the pricing page…").
           reasoning: { effort: session(sessionId)!.effort ?? "medium", summary: "auto" },
           // Its apps reach Bops from an Orgo computer over the tailnet (screen_mcp.py, when its key file
-          // went on: ensureScreenTools), never from a Chrome thread on the Mac.
+          // went on: ensureScreenTools), never from a Chrome thread on the PC.
           instructions: [
             instructions(b.name, b.role, mac, display, c.id !== b.id ? c.name : undefined, !mac && !!appsReach.get(computerId) && accountsOf(b).length > 0),
             appsNote(b, "task", { tools: !mac && !!appsReach.get(computerId) }),
@@ -960,9 +962,9 @@ async function run(sessionId: string) {
     emailResult(done, result.id, done.answer ?? "Done.");
     textResult(done, done.answer ?? "Done.");
     channelResult(done, done.answer ?? "Done.");
-    // The part only the user's Mac can do comes next, with what the cloud found.
+    // The part only the user's PC can do comes next, with what the cloud found.
     if (done.thenOnMac)
-      startSession({ botId: b.id, goal: `${done.thenOnMac}\n\nWhat the first part found (in the cloud):\n${done.answer ?? ""}`, title: `${done.title} · on your Mac`, chatId: done.chatId, sentVia: done.sentVia, where: "mac" });
+      startSession({ botId: b.id, goal: `${done.thenOnMac}\n\nWhat the first part found (in the cloud):\n${done.answer ?? ""}`, title: `${done.title} · on your PC`, chatId: done.chatId, sentVia: done.sentVia, where: "mac" });
   } catch (e) {
     if (e instanceof ScreenTaken && !stopped.has(sessionId)) {
       patchSession(sessionId, { status: "queued", lastDisplay: undefined });
@@ -1002,16 +1004,16 @@ async function run(sessionId: string) {
 }
 
 /** The user's replies not yet sent to the agent, joined into one turn. */
-/** Threads that can work on the user's Mac at once (Codex works in the background, in parallel). */
+/** Threads that can work on the user's local computer at once (Codex works in the background, in parallel). */
 const MAX_MAC = 3;
 
-/** How a bot works on the user's Mac: the instructions every Mac thread starts with. */
+/** How a bot works on the user's local computer: the instructions every local thread starts with. */
 function macInstructions(botName: string, role: string) {
   const owner = ownerName();
   return [
-    `You are ${botName}, the ${role} bot in Bops, working on ${owner}'s own Mac, through your computer-use tool.`,
+    `You are ${botName}, the ${role} bot in Bops, working on ${owner}'s own ${LOCAL_DEVICE}, through your computer-use tool.`,
     ownerLine(),
-    `You share the Mac with ${owner}, who may be using it while you work. Work in the background: don't bring apps to the front, move their windows, or close anything you didn't open unless the task needs it.`,
+    `You share the ${LOCAL_DEVICE} with ${owner}, who may be using it while you work. Work in the background: don't bring apps to the front, move their windows, or close anything you didn't open unless the task needs it.`,
     `Use only the apps the task needs. Each app needs ${owner}'s approval the first time; if they say no, do what you can without it and say what's missing.`,
     `Each message ends with a briefing of ${owner}'s computers. It's for you: don't repeat it or report screen status in your answer unless they ask.`,
     "Never send messages, buy anything, or delete data unless the task explicitly says to. When you need a decision, ask it plainly and stop.",
@@ -1021,11 +1023,70 @@ function macInstructions(botName: string, role: string) {
   ].join(" ");
 }
 
-/**
- * Run a thread on the user's Mac through Codex (see codex.ts): its own Codex thread, one turn per
- * message, each computer-use action recorded as a step. Asks for apps reach the user as cards.
- */
-/** A tool call that names a window, a process or an app: remember the window, and the app by name. */
+const NOT_WORK = /^(Bops|Electron|T3 Code.*|Codex.*|ChatGPT.*|Cua Driver|cua-spacesd|loginwindow|Dock|Finder|Terminal|Ghostty|iTerm2|Claude|Windows Terminal|powershell|pwsh|conhost)$/i;
+const friendlyApp = (name: string) => {
+  const map: Record<string, string> = {
+    chrome: "Google Chrome",
+    msedge: "Microsoft Edge",
+    explorer: "File Explorer",
+    notepad: "Notepad",
+    code: "Visual Studio Code",
+    winword: "Word",
+    excel: "Excel",
+    powerpnt: "PowerPoint",
+    outlook: "Outlook",
+    ms-teams: "Teams",
+    teams: "Teams",
+  };
+  return map[name.toLowerCase()] ?? name;
+};
+
+function processApp(pid: number, done: (name: string) => void) {
+  if (!WINDOWS) {
+    execFile("/bin/ps", ["-p", String(pid), "-o", "comm="], { timeout: 1500 }, (_e, out) =>
+      done(/\/([^/]+)\.app\//.exec(String(out ?? ""))?.[1] ?? ""),
+    );
+    return;
+  }
+  execFile(
+    "powershell.exe",
+    ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", `try { (Get-Process -Id ${pid} -ErrorAction Stop).ProcessName } catch {}`],
+    { timeout: 2500, windowsHide: true },
+    (_e, out) => done(friendlyApp(String(out ?? "").trim())),
+  );
+}
+
+const FRONT_APP_PS = String.raw`
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public static class BopsFrontApp {
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+}
+"@
+$h=[BopsFrontApp]::GetForegroundWindow()
+$pid=[uint32]0
+[void][BopsFrontApp]::GetWindowThreadProcessId($h,[ref]$pid)
+try { (Get-Process -Id $pid -ErrorAction Stop).ProcessName } catch {}
+`;
+
+function readFrontApp(done: (name: string) => void) {
+  if (!WINDOWS) {
+    execFile("/usr/bin/lsappinfo", ["info", "-only", "name", "front"], { timeout: 1500 }, (_e, out) => {
+      done(/"LSDisplayName"="([^"]+)"/.exec(String(out ?? ""))?.[1] ?? /"name"="([^"]+)"/i.exec(String(out ?? ""))?.[1] ?? "");
+    });
+    return;
+  }
+  execFile(
+    "powershell.exe",
+    ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", FRONT_APP_PS],
+    { timeout: 3000, windowsHide: true },
+    (_e, out) => done(friendlyApp(String(out ?? "").trim())),
+  );
+}
+
+/** A tool call that names a window, process or app: remember the local target for previews. */
 function noteMacTarget(sessionId: string, a: { pid?: number; window_id?: number; bundle_id?: string; app?: string; name?: string }) {
   const add = (name: string) => {
     if (!name || NOT_WORK.test(name)) return;
@@ -1034,27 +1095,21 @@ function noteMacTarget(sessionId: string, a: { pid?: number; window_id?: number;
   if (typeof a.window_id === "number" && a.window_id > 0) patchSession(sessionId, { macWindow: { windowId: a.window_id, pid: a.pid, at: Date.now() } });
   if (a.bundle_id) add(a.bundle_id.split(".").at(-1)!);
   else if (a.app) add(a.app);
-  if (typeof a.pid === "number")
-    execFile("/bin/ps", ["-p", String(a.pid), "-o", "comm="], { timeout: 1500 }, (_e, out) => add(/\/([^/]+)\.app\//.exec(String(out ?? ""))?.[1] ?? ""));
+  if (typeof a.pid === "number") processApp(a.pid, add);
 }
 
-/**
- * Which apps a Mac task uses, however it opens them (computer use, a launcher tool, a shell
- * command): whatever comes to the front while it runs is its app. Bops' own windows don't count.
- */
-const NOT_WORK = /^(Bops|Electron|T3 Code.*|Codex.*|ChatGPT.*|Cua Driver|cua-spacesd|loginwindow|Dock|Finder|Terminal|Ghostty|iTerm2|Claude)$/i;
+/** Track whichever real app comes to the front while a local-computer task is active. */
 function watchFrontApp(sessionId: string) {
   let last = "";
   const t = setInterval(() => {
-    execFile("/usr/bin/lsappinfo", ["info", "-only", "name", "front"], { timeout: 1500 }, (_e, out) => {
-      const name = /"LSDisplayName"="([^"]+)"/.exec(String(out ?? ""))?.[1] ?? /"name"="([^"]+)"/i.exec(String(out ?? ""))?.[1] ?? "";
+    readFrontApp((name) => {
       if (!name || name === last || NOT_WORK.test(name)) return;
       last = name;
-      const s = session(sessionId);
-      if (!s || !live(s)) return;
+      const current = session(sessionId);
+      if (!current || !live(current)) return;
       patchSession(sessionId, (x) => void (x.macApps = [...(x.macApps ?? []).filter((a) => a !== name), name].slice(-4)));
     });
-  }, 2000);
+  }, WINDOWS ? 3000 : 2000);
   return () => clearInterval(t);
 }
 
@@ -1066,7 +1121,7 @@ async function runMac(sessionId: string) {
   try {
     // Out of AI credit: it doesn't start (the chat shows that, with Upgrade).
     if (await creditsOut()) throw outOfCreditError();
-    step(sessionId, "setup", "Getting ready on your Mac");
+    step(sessionId, "setup", "Getting ready on your PC");
     await codex.ready();
     // The bot's apps come through Bops (vm/apps-mcp.mjs), with only the access the user gave it.
     const apps = composioOn() && accountsOf(b).length
@@ -1096,7 +1151,7 @@ async function runMac(sessionId: string) {
       threadId = started.thread.id;
       patchSession(sessionId, { codexThread: threadId });
     }
-    step(sessionId, "setup", "On your Mac");
+    step(sessionId, "setup", "On your PC");
     patchSession(sessionId, { status: "running", activity: "getting started" });
 
     let input: string | undefined = s.codexThread && s.answer ? takeReplies(sessionId) : s.goal;
@@ -1131,7 +1186,7 @@ async function runMac(sessionId: string) {
     patchSession(sessionId, { status: "failed", error, endedAt: Date.now(), activity: undefined, codexTurn: undefined });
     if (credit) addMessage({ chatId: s.chatId, role: "bot", botId: b.id, text: OUT_OF_CREDIT, sessionIds: [sessionId], resultOf: sessionId });
     else if (!stopped.has(sessionId)) {
-      const failed = addMessage({ chatId: s.chatId, role: "bot", botId: b.id, text: `I couldn't finish ${s.title} on your Mac: ${error}`, sessionIds: [sessionId], resultOf: sessionId });
+      const failed = addMessage({ chatId: s.chatId, role: "bot", botId: b.id, text: `I couldn't finish ${s.title} on your PC: ${error}`, sessionIds: [sessionId], resultOf: sessionId });
       emailResult(s, failed.id, failed.text);
       textResult(s, failed.text);
       channelResult(s, failed.text);
@@ -1482,7 +1537,7 @@ export async function takeOver(botId: string, display: number) {
     if (s) stopSession(s.id, "Paused while you took over");
     if (s) addMessage({ chatId: s.chatId, role: "system", text: `You took over from ${bot(s.botId)?.name} · paused ${s.title}` });
   }
-  // On the Mac an idle screen has no browser yet; start one. Either way, don't hand the user a blank page.
+  // On the PC an idle screen has no browser yet; start one. Either way, don't hand the user a blank page.
   if (getState().host === "mac") await ensureChrome(botId, cdpPort(getState().bots.findIndex((b) => b.id === botId), display));
   const endpoint = screenEndpoint(bot(botId)!, display);
   if (endpoint && (await currentUrl(endpoint)) === "about:blank") await navigate(endpoint, "https://www.google.com");
