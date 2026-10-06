@@ -1066,9 +1066,9 @@ public static class BopsFrontApp {
 }
 "@
 $h=[BopsFrontApp]::GetForegroundWindow()
-$pid=[uint32]0
-[void][BopsFrontApp]::GetWindowThreadProcessId($h,[ref]$pid)
-try { (Get-Process -Id $pid -ErrorAction Stop).ProcessName } catch {}
+$processId=[uint32]0
+[void][BopsFrontApp]::GetWindowThreadProcessId($h,[ref]$processId)
+try { (Get-Process -Id $processId -ErrorAction Stop).ProcessName } catch {}
 `;
 
 function readFrontApp(done: (name: string) => void) {
