@@ -1,6 +1,6 @@
 import "server-only";
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { DISPLAYS } from "@/lib/types";
@@ -15,20 +15,33 @@ import { mirroredTarget } from "./mirror";
  * Set BOPS_CHROME_WINDOWS=1 to see the windows instead.
  */
 
-const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const windows = process.platform === "win32";
+const CHROME = process.env.BOPS_CHROME_PATH || (windows
+  ? [
+      process.env.PROGRAMFILES && join(process.env.PROGRAMFILES, "Google", "Chrome", "Application", "chrome.exe"),
+      process.env["PROGRAMFILES(X86)"] && join(process.env["PROGRAMFILES(X86)"], "Google", "Chrome", "Application", "chrome.exe"),
+      process.env.LOCALAPPDATA && join(process.env.LOCALAPPDATA, "Google", "Chrome", "Application", "chrome.exe"),
+      process.env.PROGRAMFILES && join(process.env.PROGRAMFILES, "Microsoft", "Edge", "Application", "msedge.exe"),
+    ].filter(Boolean).find((p) => existsSync(p as string)) as string
+  : "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome");
 export const BOPS_HOME = join(homedir(), ".bops");
 export const WORKSPACE = join(BOPS_HOME, "workspace");
 const CHROME_VERSION = (() => {
+  if (!CHROME) return "154.0.0.0";
   try {
-    return execFileSync("defaults", ["read", "/Applications/Google Chrome.app/Contents/Info", "CFBundleShortVersionString"])
-      .toString()
-      .trim();
+    if (windows) {
+      return execFileSync("powershell.exe", ["-NoProfile", "-Command", `(Get-Item '${CHROME.replace(/'/g, "''")}').VersionInfo.ProductVersion`], { windowsHide: true })
+        .toString().trim() || "154.0.0.0";
+    }
+    return execFileSync("defaults", ["read", "/Applications/Google Chrome.app/Contents/Info", "CFBundleShortVersionString"]).toString().trim();
   } catch {
     return "154.0.0.0";
   }
 })();
 /** Headless Chrome announces itself as "HeadlessChrome"; present as the normal Mac browser. */
-const USER_AGENT = `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME_VERSION.split(".")[0]}.0.0.0 Safari/537.36`;
+const USER_AGENT = windows
+  ? `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME_VERSION.split(".")[0]}.0.0.0 Safari/537.36`
+  : `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME_VERSION.split(".")[0]}.0.0.0 Safari/537.36`;
 const PLAYWRIGHT_MCP = join(process.cwd(), "node_modules/@playwright/mcp/cli.js");
 
 /** One port per bot screen: 9300 + 10 per bot + screen index. */
@@ -47,6 +60,7 @@ export async function ensureChrome(botId: string, port: number) {
   if (await cdpUp(port)) return;
   const profile = join(BOPS_HOME, "chrome", `${botId}-${port}`);
   mkdirSync(profile, { recursive: true });
+  if (!CHROME) throw new Error("Chrome or Edge was not found. Set BOPS_CHROME_PATH in .env.local.");
   spawn(
     CHROME,
     [
@@ -59,7 +73,7 @@ export async function ensureChrome(botId: string, port: number) {
       ...(process.env.BOPS_CHROME_WINDOWS ? [] : ["--headless=new", `--user-agent=${USER_AGENT}`]),
       "about:blank",
     ],
-    { detached: true, stdio: "ignore" },
+    { detached: !windows, stdio: "ignore", windowsHide: true },
   ).unref();
   for (let i = 0; i < 40; i++) {
     if (await cdpUp(port)) return;
@@ -90,7 +104,9 @@ export const browserMcp = (port: number) => {
   const args = [PLAYWRIGHT_MCP, "--cdp-endpoint", `http://127.0.0.1:${port}`];
   // The executor's environment doesn't carry ELECTRON_RUN_AS_NODE (agentEnv), so it's set here.
   return asNode
-    ? { type: "stdio", command: "/usr/bin/env", args: ["ELECTRON_RUN_AS_NODE=1", process.execPath, ...args], cwd: WORKSPACE }
+    ? windows
+      ? { type: "stdio", command: process.execPath, args, cwd: WORKSPACE, env: { ...agentEnv(), ELECTRON_RUN_AS_NODE: "1" } }
+      : { type: "stdio", command: "/usr/bin/env", args: ["ELECTRON_RUN_AS_NODE=1", process.execPath, ...args], cwd: WORKSPACE }
     : { type: "stdio", command: process.execPath, args, cwd: WORKSPACE };
 };
 

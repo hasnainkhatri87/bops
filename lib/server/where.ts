@@ -4,14 +4,14 @@ import { bot, getState, ownerName } from "./store";
 
 export type Where = "mac" | "cloud" | "ask";
 
-export const MAC_WORDS = /\b(on|from|using|use|with) my (mac|macbook|laptop|computer)\b|\blocally\b|\bon this mac\b/i;
+export const MAC_WORDS = /\b(on|from|using|use|with) my (mac|macbook|pc|windows pc|laptop|computer)\b|\blocally\b|\bon this (mac|pc|computer)\b/i;
 const CLOUD_WORDS = /\b(in the cloud|on your (own )?computer|on your (cloud )?machine)\b/i;
 
 /**
- * Where a task should run: the bot's cloud computer, the user's own Mac, or ask them. The cloud is
+ * Where a task should run: the bot's cloud computer, the user's own computer, or ask them. The cloud is
  * the default (isolated, parallel, keeps going with the laptop closed, never touches their screen);
- * the Mac is for things only it has: its apps (Messages, Notes, Finder…), their files, sign-ins only
- * their Mac has, their network. In order: what the request says outright, the bot's own setting, the
+ * the local computer is for things only it has: its apps (Messages, Notes, Finder…), their files, sign-ins only
+ * their computer has, their network. In order: what the request says outright, the bot's own setting, the
  * user's app rules, then Jev; when Jev isn't sure, the user picks.
  */
 export async function chooseWhere(botId: string, goal: string, asked: "mac" | "cloud" | "auto" = "auto"): Promise<Where> {
@@ -37,10 +37,10 @@ export async function chooseWhere(botId: string, goal: string, asked: "mac" | "c
       where: {
         type: "choice",
         instructions:
-          `A bot is about to do \`task\` for ${owner}. It can work on its own cloud computer (a browser and apps in the cloud, isolated from ${owner}, can run long or in parallel, can sign in to sites in \`saved_logins_for_the_cloud\`), or on ${owner}'s own Mac (their apps, files and signed-in sessions). Where should it run?`,
+          `A bot is about to do \`task\` for ${owner}. It can work on its own cloud computer (a browser and apps in the cloud, isolated from ${owner}, can run long or in parallel, can sign in to sites in \`saved_logins_for_the_cloud\`), or on ${owner}'s own computer (their apps, files and signed-in sessions). Where should it run?`,
         criteria: {
           cloud: "The cloud: it's web work, research, anything a fresh browser can do, or long, parallel or scheduled work",
-          mac: `${owner}'s Mac: it needs an app only on their Mac (Messages, Notes, Mail, Photos, Finder, Keynote…), their own files, or a sign-in only their Mac has`,
+          mac: `${owner}'s Mac: it needs an app only on their computer (Messages, Notes, Mail, Photos, Finder, Keynote…), their own files, or a sign-in only their computer has`,
           unsure: "Can't tell from the task; it could reasonably be either",
         },
       },

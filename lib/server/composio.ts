@@ -1,6 +1,7 @@
 import "server-only";
 import { execFile, execFileSync } from "node:child_process";
 import { randomBytes, timingSafeEqual } from "node:crypto";
+import { join } from "node:path";
 import { Composio } from "@composio/core";
 import { live as running, type AppAccount, type AppApproval, type AppConnecting, type AppLevel, type Bot } from "@/lib/types";
 import { cloudOn, cloudProxy, cloudSession, cloudSessionNow, cloudUrl } from "./cloud";
@@ -628,7 +629,13 @@ export const reachableFromComputers = () => !["127.0.0.1", "localhost", "::1"].i
 /** Where a bot computer reaches Bops: this Mac on the tailnet. */
 export function bopsAddress() {
   if (!reachableFromComputers()) return null;
-  const cli = ["/Applications/Tailscale.app/Contents/MacOS/Tailscale", "tailscale"];
+  const cli = process.platform === "win32"
+    ? [
+        process.env.PROGRAMFILES ? join(process.env.PROGRAMFILES, "Tailscale", "tailscale.exe") : "",
+        "tailscale.exe",
+        "tailscale",
+      ].filter(Boolean)
+    : ["/Applications/Tailscale.app/Contents/MacOS/Tailscale", "tailscale"];
   for (const c of cli) {
     try {
       const ip = execFileSync(c, ["ip", "-4"], { timeout: 4000 }).toString().trim().split("\n")[0];

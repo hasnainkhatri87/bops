@@ -15,7 +15,7 @@ import { addMessage, bot, getState, id, ownerName, update } from "./store";
  * for apps built on Codex, as T3 Code and Conductor do), signed in with the user's ChatGPT account, so
  * work on their Mac runs on their plan and uses Codex's own computer use: it sees, clicks and types in
  * their apps in the background. Codex asks before using an app it hasn't been allowed; those asks
- * become cards in Bops ("Sam wants to use Calculator on your Mac"), answered once, for the
+ * become cards in Bops ("Sam wants to use Calculator on your PC"), answered once, for the
  * session, or always. Bops installs the CLI itself when the Mac has none (lib/server/codex-cli.ts).
  */
 
@@ -24,7 +24,9 @@ type Listener = (m: Rpc) => void;
 
 const CODEX_HOME = join(homedir(), ".codex");
 /** Apps that, named in a task, mean it belongs on the user's Mac (they can change the list). */
-export const DEFAULT_MAC_RULES = ["Messages", "iMessage", "Notes", "Apple Mail", "Photos", "Finder", "Keynote", "Pages", "Numbers", "Xcode", "Reminders", "my desktop", "my Downloads", "my laptop", "my Mac"];
+export const DEFAULT_MAC_RULES = process.platform === "win32"
+  ? ["Outlook", "Notepad", "Photos", "File Explorer", "Explorer", "Word", "Excel", "PowerPoint", "Teams", "my desktop", "my Downloads", "my laptop", "my PC", "my computer"]
+  : ["Messages", "iMessage", "Notes", "Apple Mail", "Photos", "Finder", "Keynote", "Pages", "Numbers", "Xcode", "Reminders", "my desktop", "my Downloads", "my laptop", "my Mac"];
 
 class Codex {
   private proc?: ChildProcessWithoutNullStreams;
@@ -153,7 +155,7 @@ class Codex {
       // just this once, and said so in the chat. Apps where using them at all can mean talking to
       // someone (Messages, Mail, Slack…) always ask: on the Mac an app is allowed as a whole.
       if (app && session && !TALKING_APPS.test(app) && (await lowRisk(`Use the ${app} app on ${ownerName()}'s Mac`, `task: ${session.goal.slice(0, 500)}`))) {
-        addMessage({ chatId: session.chatId, role: "system", text: `${bot(session.botId)?.name ?? "A bot"} used ${app} on your Mac · low risk for this task, so didn't ask`, sessionIds: [session.id] });
+        addMessage({ chatId: session.chatId, role: "system", text: `${bot(session.botId)?.name ?? "A bot"} used ${app} on your PC · low risk for this task, so didn't ask`, sessionIds: [session.id] });
         return this.respond(m.id!, { action: "accept", content: {} });
       }
       return this.hold(m, { kind: app ? "app" : "other", app, message, sessionId: session?.id, botId: session?.botId });
@@ -231,8 +233,8 @@ export function answer(approvalId: string, decision: "once" | "session" | "alway
   else codex.respond(w.rpcId, { decision: !yes ? "decline" : decision === "once" ? "accept" : "acceptForSession" });
 }
 
-/** This server runs on the user's Mac (not a hosted one), where Codex can work for the bots. */
-const onTheMac = () => process.platform === "darwin" && !onPostgres();
+/** This server runs on the user's local computer (not a hosted one), where Codex can work for the bots. */
+const onTheMac = () => (process.platform === "darwin" || process.platform === "win32") && !onPostgres();
 
 /**
  * Is the user's Mac ready for bots, and if not, the one next step: the Codex CLI (Bops installs it
@@ -249,7 +251,7 @@ export async function checkMac() {
   const bin = findCodex();
   if (!bin && !onTheMac()) {
     next = "elsewhere";
-    reason = "Computer use works in the Bops app on your Mac.";
+    reason = "Computer use works in the Bops desktop app on your PC or Windows PC.";
   } else if (!bin) {
     if (!installStatus()) installCodex(() => void checkMac().catch(() => {}));
     const failed = installStatus()?.state === "failed" ? installStatus()?.error : undefined;
@@ -257,8 +259,10 @@ export async function checkMac() {
     reason = failed !== undefined ? `Couldn't install Codex. ${failed}` : "Installing Codex";
   } else {
     const config = has(join(CODEX_HOME, "config.toml")) ? readFileSync(join(CODEX_HOME, "config.toml"), "utf8") : "";
-    const computerUse =
-      has(join(CODEX_HOME, "computer-use", "Codex Computer Use.app")) && /\[plugins\."(unified-)?computer-use@openai-bundled"\]\s*\n\s*enabled\s*=\s*true/.test(config);
+    const computerUseEnabled = /\[plugins\."(unified-)?computer-use@openai-bundled"\]\s*\n\s*enabled\s*=\s*true/.test(config);
+    const computerUse = process.platform === "win32"
+      ? computerUseEnabled
+      : has(join(CODEX_HOME, "computer-use", "Codex Computer Use.app")) && computerUseEnabled;
     try {
       await codex.ready();
       const acct = await codex.request<{ account?: { type?: string; planType?: string } | null }>("account/read", {}, 15_000);
@@ -307,7 +311,13 @@ export async function signInToCodex() {
   if (!r.authUrl) throw new Error("Codex didn't start a sign-in.");
   codex.login = { id: r.loginId, until: Date.now() + 15 * 60_000 };
   codex.loginError = undefined;
-  await new Promise<void>((res, rej) => execFile("/usr/bin/open", [r.authUrl!], (e) => (e ? rej(new Error("Couldn't open the sign-in page.")) : res())));
+  await new Promise<void>((res, rej) => {
+    if (process.platform === "win32") {
+      execFile(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", "start", "", r.authUrl!], { windowsHide: true }, (e) => e ? rej(new Error("Couldn't open the sign-in page.")) : res());
+    } else {
+      execFile("/usr/bin/open", [r.authUrl!], (e) => e ? rej(new Error("Couldn't open the sign-in page.")) : res());
+    }
+  });
   await checkMac();
 }
 
