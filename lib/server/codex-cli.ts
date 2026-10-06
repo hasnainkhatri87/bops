@@ -33,7 +33,8 @@ const runnable = (p: string) => {
 };
 
 export function findCodex() {
-  const names = windows ? ["codex.exe", "codex.cmd", "codex"] : ["codex"];
+  // Use a native executable on Windows. .cmd wrappers cannot reliably host app-server stdio.
+  const names = windows ? ["codex.exe"] : ["codex"];
   for (const dir of codexPath().split(delimiter)) for (const name of names) if (runnable(join(dir, name))) return join(dir, name);
 }
 
