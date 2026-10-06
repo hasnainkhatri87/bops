@@ -34,10 +34,10 @@ export function Sidebar({
   onCompose: () => void;
   onSettings: () => void;
   onAccount: () => void;
-  /** The setup screen: what this Mac gives Bops (setup.tsx). */
+  /** The setup screen: what this PC gives Bops (setup.tsx). */
   onSetup: () => void;
   onVault: () => void;
-  /** Show a watched screen or Mac window. */
+  /** Show a watched screen or PC window. */
   onOpenWatch: (watch: Watch) => void;
 }) {
   const [query, setQuery] = useState<string | null>(null);
@@ -146,7 +146,7 @@ export function Sidebar({
   );
 }
 
-/** Something on this Mac still needs you (setup.tsx): a small amber dot with an exclamation mark. */
+/** Something on this PC still needs you (setup.tsx): a small amber dot with an exclamation mark. */
 function NeedsYouDot({ className = "" }: { className?: string }) {
   return (
     <span className={`flex size-4 shrink-0 items-center justify-center rounded-full bg-[#E59A0B] ${className}`}>
@@ -160,7 +160,7 @@ function NeedsYouDot({ className = "" }: { className?: string }) {
 
 /**
  * You, at the bottom of the sidebar: your initials, and a menu with your Orgo account (plan and
- * usage), Settings, this Mac's permissions, and signing out. While something on this Mac still needs
+ * usage), Settings, this PC's permissions, and signing out. While something on this PC still needs
  * you (and you haven't skipped it on the setup screen), a badge on your initials opens that screen
  * and the menu item carries the same mark.
  */
@@ -200,8 +200,8 @@ function YouMenu({ state, onAccount, onSettings, onSetup }: { state: AppState; o
             setOpen(false);
             onSetup();
           }}
-          title="Something on this Mac needs you"
-          aria-label="Something on this Mac needs you"
+          title="Something on this PC needs you"
+          aria-label="Something on this PC needs you"
           className="absolute -bottom-0.5 -left-0.5 rounded-full shadow-[0_0_0_2px_#F9F9F8]"
         >
           <NeedsYouDot />
@@ -235,7 +235,7 @@ function YouMenu({ state, onAccount, onSettings, onSetup }: { state: AppState; o
               <rect x="1.8" y="2.8" width="12.4" height="8.4" rx="1.4" fill="none" stroke="#0A0A0A" strokeWidth="1.4" />
               <path d="M5.8 13.6h4.4" fill="none" stroke="#0A0A0A" strokeWidth="1.4" strokeLinecap="round" />
             </svg>
-            <span className="flex-1">Permissions on this Mac</span>
+            <span className="flex-1">Permissions on this PC</span>
             {needsYou && <NeedsYouDot />}
           </button>
           {user && (
