@@ -256,7 +256,7 @@ const execText = (file: string, args: string[], timeout = 30_000) =>
     ),
   );
 
-const pluginId = (p: PluginRow) => p.pluginId ?? (p.name && p.marketplaceName ? \`${p.name}@${p.marketplaceName}\` : "");
+const pluginId = (p: PluginRow) => p.pluginId ?? (p.name && p.marketplaceName ? `${p.name}@${p.marketplaceName}` : "");
 const isComputerUsePlugin = (p: PluginRow) =>
   /^(unified-)?computer-use@openai-bundled$/i.test(pluginId(p)) || /^(unified-)?computer-use$/i.test(p.name ?? "");
 
@@ -280,7 +280,7 @@ function enablePluginInConfig(id: string) {
   mkdirSync(CODEX_HOME, { recursive: true });
   const file = join(CODEX_HOME, "config.toml");
   let config = existsSync(file) ? readFileSync(file, "utf8") : "";
-  const header = \`[plugins."${id}"]\`;
+  const header = `[plugins."${id}"]`;
   const at = config.indexOf(header);
   if (at >= 0) {
     const next = config.indexOf("\\n[", at + header.length);
@@ -288,10 +288,10 @@ function enablePluginInConfig(id: string) {
     const section = config.slice(at, end);
     const updated = /(^|\n)\s*enabled\s*=/.test(section)
       ? section.replace(/(^|\n)(\s*)enabled\s*=\s*(true|false)/i, "$1$2enabled = true")
-      : \`${section.replace(/\s*$/, "")}\\nenabled = true\\n\`;
+      : `${section.replace(/\s*$/, "")}\\nenabled = true\\n`;
     config = config.slice(0, at) + updated + config.slice(end);
   } else {
-    config = \`${config.replace(/\s*$/, "")}\\n\\n${header}\\nenabled = true\\n\`;
+    config = `${config.replace(/\s*$/, "")}\\n\\n${header}\\nenabled = true\\n`;
   }
   writeFileSync(file, config, "utf8");
 }
