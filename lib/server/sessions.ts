@@ -174,7 +174,7 @@ async function route(sessionId: string, where: "mac" | "cloud" | "auto") {
     return;
   }
   let to = await chooseWhere(s.botId, s.goal, where).catch(() => "cloud" as const);
-  // There is no Mac to run on: say why, and run in the cloud unless the user asked for their Mac.
+  // There is no local PC to run on: say why, and run in the cloud unless the user asked for their PC.
   if (to === "mac" && !getState().mac?.ready) {
     if (where === "mac") {
       patchSession(sessionId, { routing: false, status: "failed", error: getState().mac?.reason ?? "Your PC isn't set up for bots yet", endedAt: Date.now() });
@@ -191,7 +191,7 @@ async function route(sessionId: string, where: "mac" | "cloud" | "auto") {
   const byText = lastAsk?.via === "sms" && Date.now() - lastAsk.at < 10 * 60_000;
   if (to === "ask" && (s.sentVia === "routine" || byText)) {
     to = "cloud";
-    addMessage({ chatId: s.chatId, role: "system", text: `Running “${s.title}” in the cloud${byText ? " (you texted it)" : ""} · say “run it on my Mac” to change that`, sessionIds: [sessionId] });
+    addMessage({ chatId: s.chatId, role: "system", text: `Running “${s.title}” in the cloud${byText ? " (you texted it)" : ""} · say “run it on my PC” to change that`, sessionIds: [sessionId] });
   }
   if (to === "ask") {
     patchSession(sessionId, { routing: false, askWhere: true });
@@ -624,7 +624,7 @@ function instructions(botName: string, role: string, mac: boolean, display: numb
     ownerLine(),
     ...(mac
       ? [
-          `You work in your own Chrome window on ${owner}'s Mac. Use the browser tools to navigate, read and act.`,
+          `You work in your own Chrome window on ${owner}'s PC. Use the browser tools to navigate, read and act.`,
           "Read pages with browser_snapshot rather than screenshots. Go straight to URLs when you know them.",
         ]
       : [
@@ -804,7 +804,7 @@ export async function ensureScreenTools(computerId: string, guest?: string) {
  * A guest leaving the computer it shared (to its own, or deleted). Its secret file there would stay
  * readable to every agent on that computer, and to every fork of it, so it goes, best effort, and the
  * bot gets a new secret on its next task so the old one stops working. Not while one of its threads is
- * still running (a Mac thread holds the old secret until it ends); the file goes anyway.
+ * still running (a local-PC thread holds the old secret until it ends); the file goes anyway.
  */
 export async function dropGuestKey(botId: string) {
   const b = bot(botId);
