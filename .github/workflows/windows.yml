@@ -13,15 +13,37 @@ permissions:
 jobs:
   windows:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
+
       - run: npm ci
       - run: npm run win:doctor
       - run: npm run build
-      - name: Package Windows app
-        run: npx electron-builder --win --dir --x64
+
+      - name: Build Windows installer and portable EXE
+        run: npx electron-builder --win nsis portable --x64
+
+      - name: Create SHA256 checksums
+        shell: powershell
+        run: |
+          Get-ChildItem "dist-desktop\*.exe" |
+            Get-FileHash -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash.ToLower())  $([IO.Path]::GetFileName($_.Path))" } |
+            Set-Content "dist-desktop\SHA256SUMS.txt"
+
+      - name: Upload Windows EXE files
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bops-Windows-11-x64
+          path: |
+            dist-desktop/*.exe
+            dist-desktop/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
