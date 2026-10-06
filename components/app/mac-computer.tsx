@@ -9,7 +9,7 @@ import { Mascot } from "./mascot";
 import { botBezel, post } from "./ui";
 
 /**
- * Your Mac, shown like a bot's computer (computer.tsx): one big live screen in a frame, a row of
+ * Your PC, shown like a bot's computer (computer.tsx): one big live screen in a frame, a row of
  * everything there is to see under it, and a status pill. The "screens" are the windows bots are
  * working in (live as video, by window) and each display. It follows the work the same way: it cuts
  * to the window a bot is acting in, holds each cut a few seconds, and never cuts away while you're
@@ -24,7 +24,7 @@ const QUIET_MS = 4000;
 /** Every cut stays up at least this long. */
 const DWELL_MS = 5000;
 
-/** The wash behind your Mac's screen: neutral, so the bots' colors stay theirs. */
+/** The wash behind your PC's screen: neutral, so the bots' colors stay theirs. */
 const MAC_WASH = "linear-gradient(160deg, #F4F4F2 0%, #ECECE9 55%, #E2E2DE 100%)";
 
 type Item = {
@@ -121,12 +121,13 @@ export function MacComputer({
     if (src) items.push({ key: src.id, sourceId: src.id, kind: "display", label: displays.length > 1 ? `Display ${i + 1}` : "Your screen", sub: d.label, aspect: d.width / d.height, bops: d.id === screens?.bopsOn });
   });
 
-  // Where macOS marks a streamed window as shared (its purple capsule), as a spot on the picture: as
-  // measured, else where it sits on macOS 26 windows (16 pt in from the corner, 66 by 20).
+  // Where Windows marks a streamed window as shared (its purple capsule), as a spot on the picture: as
+  // measured, else where it sits on Windows 26 windows (16 pt in from the corner, 66 by 20).
   const markerOf = (i: Item): Spot | undefined => {
     const w = i.app && i.windowId !== undefined ? windows[i.app]?.windows?.find((x) => x.windowId === i.windowId) : undefined;
     if (!w?.size?.w || !w.size.h) return undefined;
-    const m = w.marker ?? { x: 16, y: 16, w: 66, h: 20 };
+    const m = w.marker;
+    if (!m) return undefined;
     return { left: m.x / w.size.w, top: m.y / w.size.h, width: m.w / w.size.w, height: m.h / w.size.h };
   };
   const approvals = state.mac?.approvals ?? [];
@@ -135,7 +136,7 @@ export function MacComputer({
   const working = items.filter((i) => i.session && live(i.session));
   const acting = (i: Item) => !!i.session && live(i.session) && now - lastAct(i.session) < FRESH_MS;
 
-  // The newest Mac task ever started (finishing one doesn't bring an old pin back).
+  // The newest PC task ever started (finishing one doesn't bring an old pin back).
   const newestTask = Math.max(0, ...state.sessions.filter((s) => s.runsOn === "mac").map((s) => s.createdAt));
   const pinned = pin && newestTask === pin.at ? pin.key : null;
   const following = !pinned;
@@ -204,7 +205,7 @@ export function MacComputer({
           </svg>
           <span className="text-[13px] font-medium leading-4">Back</span>
         </button>
-        <span className="text-[15px] font-semibold leading-5">Your Mac</span>
+        <span className="text-[15px] font-semibold leading-5">Your PC</span>
         <span className="flex-1" />
         <div className="flex gap-1">
           {items.map((i) => {
@@ -395,7 +396,7 @@ export function MacComputer({
           <span className={`size-2 shrink-0 rounded-full ${approval || items.some(waitingOn) ? "bg-highlighter shadow-[0_0_0_1.5px_#0A0A0A]" : working.length ? "bg-[#2BB673]" : "bg-[#C9C9C6]"}`} />
           <span className="min-w-0 truncate text-[13px] leading-4">
             {grid.length
-              ? `${grid.length} bots are working on your Mac · pick one to watch it up close`
+              ? `${grid.length} bots are working on your PC · pick one to watch it up close`
               : approval
                 ? `${current?.bot?.name ?? "A bot"} needs you: ${approval.app ? `allow ${approval.app}` : approval.message}`
                 : current?.watch?.alert
@@ -407,7 +408,7 @@ export function MacComputer({
                 : current?.session && live(current.session)
                   ? `${current.bot?.name ?? "A bot"} · ${lastStep?.detail ?? current.session.activity ?? current.session.title}`
                   : working.length
-                    ? `${working.length} working on your Mac`
+                    ? `${working.length} working on your PC`
                     : `Nothing running · ${current?.label ?? "your screen"}${current?.kind === "display" ? ` (${current.sub})` : ""}`}
           </span>
           {current?.session && !grid.length && (
@@ -421,7 +422,7 @@ export function MacComputer({
           {current?.session && live(current.session) && !grid.length && (
             <button
               onClick={() => void post("/api/sessions", { sessionId: current.session!.id }, "DELETE")}
-              title="Stop this task on your Mac"
+              title="Stop this task on your PC"
               className="shrink-0 rounded-full bg-ink px-3.5 py-1.5 text-[13px] font-semibold leading-4 text-white"
             >
               Stop
@@ -486,9 +487,9 @@ function Blocked({ why }: { why: "app" | "loading" | "permission" | "nothing" })
   if (why === "loading") return <div className="h-full w-full animate-pulse" />;
   const [title, body] =
     why === "app"
-      ? ["Open the Bops app to watch your Mac", "A browser tab can't see your screen. In the Bops app, your displays and the windows bots use show here live."]
+      ? ["Open the Bops app to watch your PC", "A browser tab can't capture your PC. In the Bops Windows app, your displays and app windows show here live."]
       : why === "permission"
-        ? ["Let Bops see your screen", "macOS asks once: turn on Bops under Screen Recording, then quit and reopen Bops."]
+        ? ["Let Bops capture your screen", "Windows screen capture is available in the desktop app. Check Windows privacy settings if capture is blocked."]
         : ["Nothing to show yet", "Bops can't find a display to show."];
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-8 text-center">
@@ -499,7 +500,7 @@ function Blocked({ why }: { why: "app" | "loading" | "permission" | "nothing" })
       <span className="max-w-[340px] text-[12.5px] leading-[18px] text-[#6B6B6B]">{body}</span>
       {why === "permission" && (
         <button onClick={() => void window.bopsMac?.openScreenSettings()} className="mt-1 rounded-full bg-ink px-3.5 py-1.5 text-[12.5px] font-medium text-white">
-          Open Screen Recording settings
+          Open Windows privacy settings
         </button>
       )}
     </div>
@@ -510,8 +511,8 @@ function SettingsButton({ onClick, label }: { onClick: () => void; label?: boole
   return (
     <button
       onClick={onClick}
-      title="Your Mac settings: apps bots may use, words that mean your Mac"
-      aria-label="Your Mac settings"
+      title="Your PC settings: apps bots may use, words that mean your PC"
+      aria-label="Your PC settings"
       className={`flex shrink-0 items-center justify-center gap-1.5 rounded-full text-[12.5px] font-medium text-[#3A3A38] hover:bg-[#F2F2F0] ${label ? "px-3 py-1.5 shadow-[0_0_0_1px_#E2E2DF]" : "size-8"}`}
     >
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
@@ -519,7 +520,7 @@ function SettingsButton({ onClick, label }: { onClick: () => void; label?: boole
         <circle cx="10" cy="4.5" r="1.5" />
         <circle cx="6" cy="11.5" r="1.5" />
       </svg>
-      {label && "Your Mac settings"}
+      {label && "Your PC settings"}
     </button>
   );
 }
@@ -549,7 +550,7 @@ function watchPicks(app: string, title: string) {
 }
 
 /**
- * Watch a window on your Mac: pick the window (when it isn't the one on screen), say what's worth
+ * Watch a window on your PC: pick the window (when it isn't the one on screen), say what's worth
  * a heads-up, done. Jev reads the window's text when it changes; the main bot tells you in its chat.
  */
 function MacWatchSheet({ target, onClose }: { target: { app?: string; title?: string; windowId?: number; watch?: Watch } | null; onClose: () => void }) {
@@ -593,7 +594,7 @@ function MacWatchSheet({ target, onClose }: { target: { app?: string; title?: st
       <div onClick={(e) => e.stopPropagation()} className="flex max-h-full w-full max-w-[440px] flex-col gap-3 overflow-y-auto rounded-[20px] bg-white p-5 shadow-[0_0_0_1px_#0000000F,0_24px_60px_-20px_#00000066]">
         <div className="flex items-center gap-2">
           <WatchEye size={13} />
-          <span className="text-[15px] font-semibold leading-5">{picked ? `Watch ${picked.title}` : "Watch a window on your Mac"}</span>
+          <span className="text-[15px] font-semibold leading-5">{picked ? `Watch ${picked.title}` : "Watch a window on your PC"}</span>
         </div>
         {!picked ? (
           <>
