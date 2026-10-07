@@ -20,6 +20,18 @@ Bops uses the current native Windows Codex executable and enables OpenAI's bundl
 
 Orgo personal-device egress still requires a compatible `orgo-relay.exe`. If your Orgo distribution provides it, set `BOPS_RELAY_BIN` to its full path. This private Orgo binary is not part of the public Bops repository.
 
+## Direct AI API and strict privacy
+
+Windows builds can use a locally stored BYOK API from **Settings → AI API**.
+
+- The API key is protected locally with Windows DPAPI and is never returned to the browser after saving.
+- Direct AI bypasses the Bops Cloud OpenAI proxy for prompts and model outputs.
+- Chat, normal task and hard-task model ids are configurable independently.
+- The API base URL can be OpenAI or another OpenAI-compatible endpoint. Full long-running Bops threads require compatible Responses and Agents APIs.
+- **Strict privacy: block Bops Cloud** is on by default for new Direct AI setups. It disables Bops Cloud provider proxies, state backup and the webhook tunnel.
+- Cloud-computer key sharing is off by default. When enabled, the AI API key is copied to the user's Orgo VM so cloud-computer agent tasks can run.
+- With strict privacy on, hosted Bops Cloud-backed integrations such as Composio, Honcho and phone services are unavailable unless equivalent self-hosted provider keys are configured.
+
 ## Requirements
 
 - Windows 11 x64
