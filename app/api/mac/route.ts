@@ -3,7 +3,7 @@ import { update } from "@/lib/server/store";
 
 export const dynamic = "force-dynamic";
 
-/** Answer Codex's question about the user's Mac (use this app once, this session, always, or no). */
+/** Answer Codex's question about the user's PC (use this app once, this session, always, or no). */
 export async function POST(request: Request) {
   const { id, decision } = (await request.json()) as { id?: string; decision?: "once" | "session" | "always" | "deny" };
   if (!id || !decision) return Response.json({ error: "which request, and what answer?" }, { status: 400 });
@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   return Response.json({ ok: true });
 }
 
-/** The user's Mac settings: the words that mean a task belongs there, apps no longer always allowed, or a fresh check. */
+/** The user's PC settings: the words that mean a task belongs there, apps no longer always allowed, or a fresh check. */
 export async function PATCH(request: Request) {
   const body = (await request.json()) as { rules?: string[]; resetRules?: boolean; removeApp?: string; check?: boolean };
   update((state) => {

@@ -7,16 +7,16 @@ import { useMacApp } from "./mac-screens";
 import { post } from "./ui";
 
 /*
- * Everything Bops needs on this Mac, in one place (Setup). It never stands in the way: signing in goes
+ * Everything Bops needs on this PC, in one place (Setup). It never stands in the way: signing in goes
  * straight to the app, and the account menu (sidebar.tsx) shows a badge while something here still
- * needs the user and they haven't skipped it, and opens this as a sheet. Settings → This Mac has the
+ * needs the user and they haven't skipped it, and opens this as a sheet. Settings → This PC has the
  * same cards.
  *
- * - Screen recording, the microphone and notifications are this app's own macOS permissions, asked
+ * - Screen recording, the microphone and notifications are this app's own Windows permissions, asked
  *   through the Mac app (desktop/main.cjs, window.bopsMac.permissions). In a browser they can't be.
- * - Computer use on your Mac runs through Codex, one step at a time (state.mac, lib/server/codex.ts):
+ * - Computer use on your PC runs through Codex, one step at a time (state.mac, lib/server/codex.ts):
  *   Bops installs the Codex CLI by itself, then the user signs in to Codex and turns on its Computer Use.
- * - Routing through this Mac: bots' computers reach the internet through this Mac (app/api/relay).
+ * - Routing through this PC: bots' computers reach the internet through this PC (app/api/relay).
  *   It's on by default wherever Orgo offers it, so the card shows it on; turning it off sticks.
  *
  * The user's mobile isn't asked for here: it becomes theirs when they call or text their bot's number
@@ -43,7 +43,7 @@ const ITEMS: Item[] = ["screen", "microphone", "notifications", "computer-use", 
 /** The OS permissions setup asks for. Accessibility isn't one: Bops itself never drives other apps. */
 const ASKED: PermId[] = ["microphone", "notifications", "screen"];
 
-/** Runs `fn` now, every few seconds, and whenever the window comes back (from System Settings, say). */
+/** Runs `fn` now, every few seconds, and whenever the window comes back (from Windows Settings, say). */
 function useWhileOpen(fn: () => void, every = 3000) {
   const ref = useRef(fn);
   useEffect(() => {
@@ -64,7 +64,7 @@ function useWhileOpen(fn: () => void, every = 3000) {
   }, [every]);
 }
 
-/** This Mac's permissions for Bops, read live, and whether Screen Recording waits on a restart. */
+/** This PC's permissions for Bops, read live, and whether screen capture waits on a restart. */
 function usePermissions(every: number) {
   const inApp = useMacApp();
   const [status, setStatus] = useState<Partial<Record<PermId, PermStatus>> | null>(null);
@@ -83,7 +83,7 @@ function usePermissions(every: number) {
   return { inApp: inApp && !!bridge()?.permissions, status, restart, refresh };
 }
 
-/** Routing through this Mac (GET/POST /api/relay). A server without the route reads as not available. */
+/** Routing through this PC (GET/POST /api/relay). A server without the route reads as not available. */
 function useRelay(every: number) {
   const [info, setInfo] = useState<RelayInfo | null>(null);
   const [busy, setBusy] = useState(false);
@@ -91,7 +91,7 @@ function useRelay(every: number) {
   const read = async (res: Response) => {
     const j = (await res.json().catch(() => ({}))) as Partial<RelayInfo> & { error?: string };
     if (res.status === 404) return { available: false, on: false, running: false, routedComputers: [] } satisfies RelayInfo;
-    if (!res.ok && j.available === undefined) throw new Error(j.error || j.reason || "Couldn't reach routing on this Mac.");
+    if (!res.ok && j.available === undefined) throw new Error(j.error || j.reason || "Couldn't reach routing on this PC.");
     return { available: !!j.available, on: !!j.on, reason: j.reason, device: j.device, running: !!j.running, online: j.online, routedComputers: j.routedComputers ?? [] } satisfies RelayInfo;
   };
   const load = useCallback(async () => {
@@ -122,7 +122,7 @@ function useRelay(every: number) {
 function useSetupItems(state: AppState, slow = false) {
   const perms = usePermissions(slow ? 15_000 : 3000);
   const relay = useRelay(slow ? 30_000 : 5000);
-  // Grants made in System Settings show up through the polling; this is what was opened there.
+  // Grants made in Windows Settings show up through the polling; this is what was opened there.
   const [sentToSettings, setSent] = useState<Set<PermId>>(new Set());
   const [asking, setAsking] = useState<PermId | null>(null);
   const ask = async (id: PermId) => {
@@ -131,7 +131,7 @@ function useSetupItems(state: AppState, slow = false) {
     setAsking(id);
     try {
       const now = await p.request(id);
-      // macOS answers Screen Recording in System Settings (its prompt offers to open it), and a grant
+      // Windows answers screen capture in Windows Settings (its prompt offers to open it), and a grant
       // there only applies after a restart: offer one from here on.
       if (id === "screen" && now !== "granted") setSent((s) => new Set(s).add("screen"));
     } finally {
@@ -240,7 +240,7 @@ const ICONS = {
 };
 
 const COPY: Record<"screen" | "microphone" | "notifications", { title: string; line: string }> = {
-  screen: { title: "Screen recording", line: "See your Mac live in Bops, and watch bots work on it." },
+  screen: { title: "Screen capture", line: "See your PC live in Bops, and watch bots work on it." },
   microphone: { title: "Microphone", line: "Talk to your bots on a call." },
   notifications: { title: "Notifications", line: "Hear from bots when something needs you." },
 };
@@ -250,9 +250,9 @@ function PermissionCard({ id, items }: { id: "screen" | "microphone" | "notifica
   const s = perms.status?.[id];
   const copy = COPY[id];
   if (!perms.inApp)
-    return <Card icon={ICONS[id]} title={copy.title} line={copy.line} tone="none" status="Needs the Bops app for Mac" />;
+    return <Card icon={ICONS[id]} title={copy.title} line={copy.line} tone="none" status="Needs the Bops app for Windows" />;
   if (!s) return <Card icon={ICONS[id]} title={copy.title} line={copy.line} tone="none" status="Checking" />;
-  // Screen Recording turned on while Bops was open: macOS applies it on the next launch.
+  // screen capture turned on while Bops was open: Windows applies it on the next launch.
   const restart = id === "screen" && (perms.restart || (s !== "granted" && sentToSettings.has("screen")));
   const status =
     s === "granted"
@@ -261,14 +261,14 @@ function PermissionCard({ id, items }: { id: "screen" | "microphone" | "notifica
         : "Allowed"
       : s === "restricted"
         ? id === "notifications"
-          ? "Not available on this Mac"
-          : "Blocked by your Mac's settings or admin"
+          ? "Not available on this PC"
+          : "Blocked by your PC's settings or admin"
         : s === "denied"
           ? restart
-            ? "Turn on Bops in System Settings, then restart Bops"
-            : "Off. Turn it on in System Settings"
+            ? "Turn on Bops in Windows Settings, then restart Bops"
+            : "Off. Turn it on in Windows Settings"
           : id === "notifications" && s === "unknown"
-            ? "Asked. Check System Settings if none showed"
+            ? "Asked. Check Windows Settings if none showed"
             : "Not asked yet";
   const tone: Tone = s === "granted" && !(id === "screen" && perms.restart) ? "ok" : s === "not-determined" || s === "unknown" ? "off" : "todo";
   return (
@@ -284,7 +284,7 @@ function PermissionCard({ id, items }: { id: "screen" | "microphone" | "notifica
         </button>
       ) : s === "denied" || (s === "unknown" && id !== "notifications") ? (
         <button onClick={() => void openSettings(id)} className={restart ? light : dark}>
-          Open System Settings
+          Open Windows Settings
         </button>
       ) : null}
     </Card>
@@ -298,7 +298,7 @@ const planName = (plan: string) => plan.charAt(0).toUpperCase() + plan.slice(1);
 const STEP = {
   codex: { label: "Retry", action: "install" },
   "sign-in": { label: "Sign in", action: "sign-in" },
-  "computer-use": { label: "Open Codex", action: "open" },
+  "computer-use": { label: "Enable", action: "open" },
 } as const;
 
 /**
@@ -332,7 +332,7 @@ function ComputerUseCard({ items }: { items: Items }) {
     try {
       const res = await post("/api/mac/codex", { action });
       const j = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) throw new Error(j.error || "Couldn't reach Codex on this Mac.");
+      if (!res.ok) throw new Error(j.error || "Couldn't reach Codex on this PC.");
       if (action === "open") setOpened(true);
       until.current = Date.now() + 3 * 60_000;
     } catch (e) {
@@ -340,7 +340,7 @@ function ComputerUseCard({ items }: { items: Items }) {
     }
     setBusy(false);
   };
-  const card = { icon: ICONS.computerUse, title: "Computer use on your Mac", line: "Bots use apps on this Mac through Codex. You approve each app the first time." };
+  const card = { icon: ICONS.computerUse, title: "Computer use on your PC", line: "Bots use apps on this PC through Codex. You approve each app the first time." };
   if (!m) return <Card {...card} tone="none" status="Checking" />;
   if (m.ready) return <Card {...card} tone="ok" status={m.plan && m.plan !== "unknown" ? `Ready on your ${planName(m.plan)} plan` : "Ready"} />;
   if (!m.next || m.next === "elsewhere") return <Card {...card} tone="none" status={m.reason ?? "Checking"} />;
@@ -353,7 +353,7 @@ function ComputerUseCard({ items }: { items: Items }) {
   const step = STEP[m.next];
   // Once the user is on it (a sign-in open in the browser, Codex opened), the button only starts it over.
   const again = (m.next === "sign-in" && !!m.signingIn) || (m.next === "computer-use" && opened);
-  const status = error ?? (m.next === "computer-use" && opened ? "In Codex, turn on Computer Use in Settings" : (m.reason ?? ""));
+  const status = error ?? (m.next === "computer-use" && opened ? "Computer Use enabled; checking" : (m.reason ?? ""));
   return (
     <Card {...card} tone="todo" status={status}>
       <button disabled={busy} onClick={() => void act(step.action)} className={again ? light : dark}>
@@ -365,9 +365,9 @@ function ComputerUseCard({ items }: { items: Items }) {
 
 function RelayCard({ items }: { items: Items }) {
   const { info, busy, error, turn } = items.relay;
-  const line = "Your bots' computers go online through this Mac, so websites see your home internet.";
-  if (!info) return <Card icon={ICONS.relay} title="Route through this Mac" line={line} tone="none" status="Checking" />;
-  if (!info.available) return <Card icon={ICONS.relay} title="Route through this Mac" line={line} tone="none" status={info.reason ? `Not available yet. ${info.reason}` : "Not available yet"} />;
+  const line = "Your bots' computers go online through this PC, so websites see your home internet.";
+  if (!info) return <Card icon={ICONS.relay} title="Route through this PC" line={line} tone="none" status="Checking" />;
+  if (!info.available) return <Card icon={ICONS.relay} title="Route through this PC" line={line} tone="none" status={info.reason ? `Not available yet. ${info.reason}` : "Not available yet"} />;
   const n = info.routedComputers.length;
   // On by default: the relay may still be starting (or reconnecting) while it's on.
   const connecting = !info.running || info.online === false;
@@ -377,7 +377,7 @@ function RelayCard({ items }: { items: Items }) {
       ? `On${info.device ? ` as ${info.device.name}` : ""}${connecting ? ", connecting" : ""}. ${n ? `${n} computer${n === 1 ? "" : "s"} routed` : "No computers routed yet"}`
       : "Off. Bots' computers use Orgo's connection";
   return (
-    <Card icon={ICONS.relay} title="Route through this Mac" line={line} tone={error ? "todo" : info.on ? (connecting ? "todo" : "ok") : "off"} status={status}>
+    <Card icon={ICONS.relay} title="Route through this PC" line={line} tone={error ? "todo" : info.on ? (connecting ? "todo" : "ok") : "off"} status={status}>
       <button disabled={busy} onClick={() => void turn(!info.on)} className={info.on ? light : dark}>
         {busy ? <Spinner size={11} color={info.on ? "#0A0A0A" : "#FFFFFF"} /> : info.on ? "Turn off" : "Turn on"}
       </button>
@@ -397,7 +397,7 @@ function Cards({ items }: { items: Items }) {
   );
 }
 
-/** Ask macOS for each permission still unasked, one after another (the microphone and notifications first: their prompts stay in Bops). */
+/** Ask Windows for each permission still unasked, one after another (the microphone and notifications first: their prompts stay in Bops). */
 async function allowAll(items: Items) {
   for (const id of ASKED) {
     const s = items.perms.status?.[id];
@@ -431,15 +431,15 @@ export function Setup({ state, onClose }: { state: AppState; onClose: () => void
       >
         <div className="flex flex-col items-center gap-1.5 pb-5 text-center">
           <Mascot botId="boppy" color="#0A0A0A" size={48} />
-          <span className="pt-3 text-[20px] font-semibold leading-6 tracking-[-0.01em]">Set up Bops on this Mac</span>
+          <span className="pt-3 text-[20px] font-semibold leading-6 tracking-[-0.01em]">Set up Bops on this PC</span>
           <span className="max-w-[380px] text-[13.5px] leading-[19px] text-pencil">
             {items.perms.inApp
               ? "A few things your bots need. Allow what you want now; you can change any of it later in Settings."
-              : "Screen, microphone and notifications need the Bops app for Mac. You can set up the rest here."}
+              : "Screen capture, microphone and notifications need the Bops app for Windows. You can set up the rest here."}
           </span>
         </div>
         <div className="flex flex-col gap-2">
-          <span className="text-[12px] leading-4 text-pencil">This Mac</span>
+          <span className="text-[12px] leading-4 text-pencil">This PC</span>
           <Cards items={items} />
         </div>
         <div className="flex flex-col gap-2 pt-5">
@@ -453,7 +453,7 @@ export function Setup({ state, onClose }: { state: AppState; onClose: () => void
               className="flex h-10 w-full items-center justify-center gap-2 rounded-full bg-ink text-[13.5px] font-medium text-white disabled:opacity-50"
             >
               {allowing && <Spinner size={13} color="#FFFFFF" />}
-              {allowing ? "Asking your Mac" : "Allow all"}
+              {allowing ? "Asking your PC" : "Allow all"}
             </button>
           )}
           <button
@@ -486,13 +486,13 @@ export function useSetupNeedsYou(state: AppState) {
 
 /* ---------------- In Settings ---------------- */
 
-/** Settings → This Mac: the same cards, to come back to any time. */
+/** Settings → This PC: the same cards, to come back to any time. */
 export function ThisMacSettings({ state }: { state: AppState }) {
   const items = useSetupItems(state);
   return (
     <div className="flex flex-col gap-2 px-[22px] pt-4">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-[13px] font-semibold">This Mac</span>
+        <span className="text-[13px] font-semibold">This PC</span>
         {items.perms.inApp && ASKED.some((id) => items.perms.status?.[id] === "not-determined") && (
           <button onClick={() => void allowAll(items)} className={light}>
             Allow all

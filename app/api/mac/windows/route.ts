@@ -3,8 +3,8 @@ import { appWindows, listWindows, mainWindow, sharingMarker } from "@/lib/server
 export const dynamic = "force-dynamic";
 
 /**
- * Which window each app has on the user's Mac (?apps=Notes,Calculator), so the Your Mac tab can stream
- * the windows bots use. Its window id is the one macOS (and Electron's screen capture) knows.
+ * Which window each app has on the user's PC (?apps=Notes,Calculator), so the Your PC tab can stream
+ * the windows bots use. Its window id is the one Windows (and Electron's screen capture) knows.
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
             windowId: w.window_id,
             title: w.title ?? app,
             owner: w.app_name,
-            // Each window's size and where macOS marks it as shared, so a watch's eye can sit on that mark.
+            // Each window's size and where Windows marks it as shared, so a watch's eye can sit on that mark.
             windows: await Promise.all(
               all.slice(0, 6).map(async (x) => ({ windowId: x.window_id, title: x.title || app, size: x.bounds && { w: x.bounds.width, h: x.bounds.height }, marker: await sharingMarker(x) })),
             ),

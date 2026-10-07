@@ -73,8 +73,10 @@ function packagedServer() {
     if (name === ".data" || name.startsWith(".env")) continue;
     const link = path.join(home, name);
     const st = fs.lstatSync(link, { throwIfNoEntry: false });
-    if (st && !st.isSymbolicLink()) continue;
-    if (st && fs.readlinkSync(link) === path.join(dir, name)) continue;
+    // macOS keeps an existing real file alone. On Windows a real file/directory may be our
+    // symlink-permission fallback copy from an older app version, so refresh it from this build.
+    if (st && !st.isSymbolicLink() && !win) continue;
+    if (st && st.isSymbolicLink() && fs.readlinkSync(link) === path.join(dir, name)) continue;
     if (st) fs.rmSync(link, { recursive: true, force: true });
     if (win) {
       const src = path.join(dir, name);
@@ -88,7 +90,7 @@ function packagedServer() {
       fs.symlinkSync(path.join(dir, name), link);
     }
   }
-  // Settings for this Mac (self-hosting, testing) go in ~/Library/Application Support/Bops/.env.local;
+  // Per-machine self-hosting/testing settings live in the platform's Bops user-data folder as .env.local;
   // the app itself ships with no keys.
   let env = {};
   try {
@@ -226,7 +228,7 @@ ipcMain.handle("mac-screens", async () => {
   }));
   // The display Bops is on: showing it shows Bops inside Bops, so the tab prefers another.
   const win = BrowserWindow.getAllWindows()[0];
-  const bopsOn = win ? String(screen.getDisplayMatching(win.getBounds()).id) : undefined;
+  const bopsOn = mainWin ? String(screen.getDisplayMatching(mainWin.getBounds()).id) : undefined;
   if (access !== "granted") return { access, displays, sources: [], bopsOn };
   const list = await desktopCapturer.getSources({ types: ["screen", "window"], thumbnailSize: { width: 0, height: 0 } });
   return { access, displays, bopsOn, sources: list.map((s) => ({ id: s.id, name: s.name, displayId: s.display_id || undefined })) };
@@ -292,6 +294,16 @@ function askNotify() {
 }
 
 function permStatus(id) {
+  if (win) {
+    if (id === "notifications") return notifyStatus();
+    if (id === "microphone") {
+      const status = systemPreferences.getMediaAccessStatus("microphone");
+      return status === "unknown" ? "not-determined" : status;
+    }
+    // Windows desktop capture and UI Automation do not use a macOS-style app grant.
+    if (id === "screen" || id === "accessibility") return "granted";
+    return "unknown";
+  }
   if (!mac) return id === "notifications" ? notifyStatus() : "granted";
   if (id === "screen") return screenStatus();
   if (id === "microphone") return systemPreferences.getMediaAccessStatus(id);
@@ -303,6 +315,15 @@ function permStatus(id) {
 ipcMain.handle("perm-status", () => Object.fromEntries(PERM_IDS.map((id) => [id, permStatus(id)])));
 ipcMain.handle("perm-request", async (_, id) => {
   if (!PERM_IDS.includes(id)) return "unknown";
+  if (win) {
+    if (id === "notifications") return askNotify();
+    if (id === "microphone") {
+      const status = permStatus(id);
+      if (status !== "granted") await shell.openExternal("ms-settings:privacy-microphone");
+      return status;
+    }
+    return "granted";
+  }
   if (!mac) return id === "notifications" ? askNotify() : "granted";
   if (id === "microphone") {
     await systemPreferences.askForMediaAccess("microphone").catch(() => false);
@@ -370,6 +391,7 @@ ipcMain.handle("mac-show-main", () => {
 
 app.setName("Bops");
 app.whenReady().then(() => {
+  if (win) app.setAppUserModelId("ai.orgo.bops");
   if (process.platform === "darwin" && fs.existsSync(ICON)) app.dock.setIcon(nativeImage.createFromPath(ICON));
   void createWindow();
   app.on("activate", () => BrowserWindow.getAllWindows().length === 0 && void createWindow());

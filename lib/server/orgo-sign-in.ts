@@ -11,8 +11,8 @@ import { bindSignIn, getState, update } from "./store";
 
 /**
  * Sign in with Orgo: Orgo's device-code flow (orgo-web app/api/cli/auth), the one `orgo login` and
- * Orgo for Mac use. Start asks Orgo for a code; the user approves it on orgo.ai in their browser;
- * polling picks up the API key Orgo mints for this Mac ("CLI on <this Mac's name>", account-wide).
+ * Orgo desktop app use. Start asks Orgo for a code; the user approves it on orgo.ai in their browser;
+ * polling picks up the API key Orgo mints for this computer ("CLI on <this computer's name>", account-wide).
  *
  * The device code is the proof that collects the key, so it stays here on the server; the app only
  * ever sees the short code to compare and the page to open. One sign-in at a time per install.
@@ -44,7 +44,7 @@ type Pending = SignInStart & { deviceCode: string; polledAt: number; collected?:
 const g = globalThis as unknown as { bopsSignIn?: Pending | null; bopsSignInPoll?: Promise<SignInPoll> | null };
 
 /**
- * Orgo sends both numbers as bare JSON. Like Orgo for Mac (DeviceCodeAuth.swift), bound them so a
+ * Orgo sends both numbers as bare JSON. Like Orgo desktop app (DeviceCodeAuth.swift), bound them so a
  * bad value can't make the code live forever or the app poll in a tight loop.
  */
 const clampSeconds = (v: unknown, lo: number, hi: number) => (typeof v === "number" && !Number.isNaN(v) ? Math.min(Math.max(v, lo), hi) : lo);
@@ -64,11 +64,13 @@ async function orgoPost<T>(path: string, body: unknown): Promise<T> {
   return json;
 }
 
-/** This Mac's name as the user knows it ("Ana's MacBook Air"), shown on Orgo's approve page. */
-const macName = () =>
-  new Promise<string>((resolve) =>
+/** This computer's name as the user knows it ("Ana's MacBook Air"), shown on Orgo's approve page. */
+const macName = () => {
+  if (process.platform === "win32") return Promise.resolve(hostname() || "Windows PC");
+  return new Promise<string>((resolve) =>
     execFile("scutil", ["--get", "ComputerName"], { timeout: 2000 }, (e, out) => resolve((!e && out.trim()) || hostname().replace(/\.local$/, ""))),
   );
+};
 
 /** Only a web page may be opened from here (the app hands it to the system browser). */
 function webUrl(u: unknown, fallback: string) {
@@ -157,7 +159,7 @@ async function finish(p: Pending, apiKey: string, user: OrgoUser): Promise<SignI
   seedOwnerName(user);
   void adoptComputers(user.id).catch((e: Error) => console.warn(`[sign-in] checking the bots' computers: ${e.message}`));
   // Bops Cloud starts over on this key (its session, the tunnel, the state backup, a restore onto a
-  // fresh install), and routing through this Mac turns on by itself where Orgo offers it.
+  // fresh install), and routing through this computer turns on by itself where Orgo offers it.
   void startCloud({ signedIn: true });
   relayAfterSignIn();
   return { status: "approved", user };

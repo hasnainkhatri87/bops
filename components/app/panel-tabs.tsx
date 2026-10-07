@@ -86,7 +86,7 @@ function Tab({ state, tab: t, on, closable, onPick, onClose }: { state: AppState
       (state.watches?.some((w) => w.botId === t.botId && w.alert) || state.sessions.some((s) => s.botId === t.botId && live(s) && s.blocker))) ||
     (t.kind === "mac" && !!state.mac?.approvals.length);
   const label =
-    t.kind === "computer" ? `${b?.name ?? "Bot"}'s computer` : t.kind === "bot" ? (b?.name ?? "Bot") : t.kind === "web" ? t.title || hostOf(t.url) : t.kind === "vault" ? "Vault" : t.kind === "mac" ? "Your Mac" : "New tab";
+    t.kind === "computer" ? `${b?.name ?? "Bot"}'s computer` : t.kind === "bot" ? (b?.name ?? "Bot") : t.kind === "web" ? t.title || hostOf(t.url) : t.kind === "vault" ? "Vault" : t.kind === "mac" ? "Your PC" : "New tab";
   return (
     <div
       onClick={onPick}
@@ -342,8 +342,8 @@ export function NewTab({
             <MacIcon />
           </span>
           <span className="flex flex-col">
-            <span className="text-[14px] font-medium leading-[18px]">Your Mac</span>
-            <span className="text-[12px] leading-4 text-[#6B6B6B]">{state.mac?.ready ? "Where bots work when a task needs your Mac" : (state.mac?.reason ?? "Checking…")}</span>
+            <span className="text-[14px] font-medium leading-[18px]">Your PC</span>
+            <span className="text-[12px] leading-4 text-[#6B6B6B]">{state.mac?.ready ? "Where bots work when a task needs your PC" : (state.mac?.reason ?? "Checking…")}</span>
           </span>
         </button>
         <span className="px-1 text-[12px] font-medium leading-4 text-[#9A9A98]">Your bots</span>

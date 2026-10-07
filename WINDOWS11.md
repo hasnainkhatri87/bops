@@ -14,9 +14,11 @@ This branch ports the Bops desktop application to Windows 11 while keeping the u
 - NSIS installer and portable x64 executable
 - Electron desktop screen/window previews
 
-## Current limitation
+## Windows parity notes
 
-Native control of arbitrary Windows desktop apps depends on the current Codex Computer Use runtime for Windows. The Bops app, cloud computers and local browser automation work independently of that feature.
+Bops uses the current native Windows Codex executable and enables OpenAI's bundled Computer Use plugin for local-PC tasks. Local screen/window previews, UI Automation text reading, Chrome/Edge workers, protected secrets, notifications, installer packaging and cloud-computer workflows have Windows implementations.
+
+Orgo personal-device egress still requires a compatible `orgo-relay.exe`. If your Orgo distribution provides it, set `BOPS_RELAY_BIN` to its full path. This private Orgo binary is not part of the public Bops repository.
 
 ## Requirements
 
@@ -75,3 +77,9 @@ BOPS_CHROME_PATH=C:\Program Files\Google\Chrome\Application\chrome.exe
 ```
 
 Do not expose the local Bops server directly to the public Internet.
+
+For an externally supplied Windows Orgo relay:
+
+```env
+BOPS_RELAY_BIN=C:\\path\\to\\orgo-relay.exe
+```

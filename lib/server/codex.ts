@@ -1,6 +1,6 @@
 import "server-only";
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { MacApproval, MacState } from "@/lib/types";
@@ -11,19 +11,20 @@ import { onPostgres } from "./persist";
 import { addMessage, bot, getState, id, ownerName, update } from "./store";
 
 /**
- * The user's Mac, through Codex. Bops drives a local `codex app-server` (OpenAI's documented protocol
+ * The user's PC, through Codex. Bops drives a local `codex app-server` (OpenAI's documented protocol
  * for apps built on Codex, as T3 Code and Conductor do), signed in with the user's ChatGPT account, so
  * work on their Mac runs on their plan and uses Codex's own computer use: it sees, clicks and types in
  * their apps in the background. Codex asks before using an app it hasn't been allowed; those asks
  * become cards in Bops ("Sam wants to use Calculator on your PC"), answered once, for the
- * session, or always. Bops installs the CLI itself when the Mac has none (lib/server/codex-cli.ts).
+ * session, or always. Bops installs the CLI itself when the PC has none (lib/server/codex-cli.ts).
  */
 
 type Rpc = { id?: number | string; method?: string; params?: Record<string, unknown> & { threadId?: string }; result?: unknown; error?: { message?: string } };
 type Listener = (m: Rpc) => void;
 
 const CODEX_HOME = join(homedir(), ".codex");
-/** Apps that, named in a task, mean it belongs on the user's Mac (they can change the list). */
+const WINDOWS = process.platform === "win32";
+/** Apps that, named in a task, mean it belongs on the user's PC (they can change the list). */
 export const DEFAULT_MAC_RULES = process.platform === "win32"
   ? ["Outlook", "Notepad", "Photos", "File Explorer", "Explorer", "Word", "Excel", "PowerPoint", "Teams", "my desktop", "my Downloads", "my laptop", "my PC", "my computer"]
   : ["Messages", "iMessage", "Notes", "Apple Mail", "Photos", "Finder", "Keynote", "Pages", "Numbers", "Xcode", "Reminders", "my desktop", "my Downloads", "my laptop", "my Mac"];
@@ -82,6 +83,15 @@ class Codex {
     })();
     this.starting.catch(() => (this.starting = undefined));
     return this.starting;
+  }
+
+  restart() {
+    const p = this.proc;
+    this.proc = undefined;
+    this.starting = undefined;
+    if (p && p.exitCode === null) {
+      try { p.kill(); } catch {}
+    }
   }
 
   private send(m: object) {
@@ -153,8 +163,8 @@ class Codex {
       if (always || forSession) return this.respond(m.id!, { action: "accept", content: {} });
       // Low-stakes for this task (looking at Calculator, Notes, a setting): allowed without asking,
       // just this once, and said so in the chat. Apps where using them at all can mean talking to
-      // someone (Messages, Mail, Slack…) always ask: on the Mac an app is allowed as a whole.
-      if (app && session && !TALKING_APPS.test(app) && (await lowRisk(`Use the ${app} app on ${ownerName()}'s Mac`, `task: ${session.goal.slice(0, 500)}`))) {
+      // someone (Messages, Mail, Slack…) always ask: on the PC an app is allowed as a whole.
+      if (app && session && !TALKING_APPS.test(app) && (await lowRisk(`Use the ${app} app on ${ownerName()}'s ${WINDOWS ? "PC" : "Mac"}`, `task: ${session.goal.slice(0, 500)}`))) {
         addMessage({ chatId: session.chatId, role: "system", text: `${bot(session.botId)?.name ?? "A bot"} used ${app} on your PC · low risk for this task, so didn't ask`, sessionIds: [session.id] });
         return this.respond(m.id!, { action: "accept", content: {} });
       }
@@ -176,7 +186,7 @@ class Codex {
     this.send({ jsonrpc: "2.0", id: m.id, error: { code: -32601, message: "Bops can't do that" } });
   }
 
-  /** The sign-in in the browser ended: look at the Mac again right away, so the setup card moves on. */
+  /** The sign-in in the browser ended: look at the PC again right away, so the setup card moves on. */
   private signedIn(p: { loginId?: string | null; success?: boolean; error?: string | null }) {
     if (this.login?.id && p.loginId && p.loginId !== this.login.id) return;
     this.login = undefined;
@@ -184,7 +194,7 @@ class Codex {
     void checkMac().catch(() => {});
   }
 
-  /** A question got its answer somewhere else (computer use's own prompt on the Mac): drop its card. */
+  /** A question got its answer somewhere else (computer use's own prompt on the PC): drop its card. */
   private resolvedElsewhere(requestId: number | string | undefined) {
     if (requestId === undefined) return;
     for (const [approvalId, w] of this.waiting)
@@ -236,8 +246,72 @@ export function answer(approvalId: string, decision: "once" | "session" | "alway
 /** This server runs on the user's local computer (not a hosted one), where Codex can work for the bots. */
 const onTheMac = () => (process.platform === "darwin" || process.platform === "win32") && !onPostgres();
 
+type PluginRow = { pluginId?: string; name?: string; marketplaceName?: string; installed?: boolean; enabled?: boolean };
+type PluginList = { installed?: PluginRow[]; available?: PluginRow[] };
+
+const execText = (file: string, args: string[], timeout = 30_000) =>
+  new Promise<string>((resolve, reject) =>
+    execFile(file, args, { timeout, windowsHide: true, env: agentEnv({ PATH: codexPath() }) }, (e, out, err) =>
+      e ? reject(new Error(String(err || e.message).trim())) : resolve(String(out).trim()),
+    ),
+  );
+
+const pluginId = (p: PluginRow) => p.pluginId ?? (p.name && p.marketplaceName ? `${p.name}@${p.marketplaceName}` : "");
+const isComputerUsePlugin = (p: PluginRow) =>
+  /^(unified-)?computer-use@openai-bundled$/i.test(pluginId(p)) || /^(unified-)?computer-use$/i.test(p.name ?? "");
+
+async function windowsComputerUse(bin: string) {
+  const configPath = join(CODEX_HOME, "config.toml");
+  const config = existsSync(configPath) ? readFileSync(configPath, "utf8") : "";
+  const configured = /\[plugins\."(unified-)?computer-use@openai-bundled"\][\s\S]*?enabled\s*=\s*true/i.test(config);
+  try {
+    const raw = await execText(bin, ["plugin", "list", "--json"], 45_000);
+    const list = JSON.parse(raw) as PluginList;
+    const entry = (list.installed ?? []).find(isComputerUsePlugin);
+    if (entry) return { installed: true, enabled: entry.enabled !== false || configured, id: pluginId(entry) || "computer-use@openai-bundled" };
+    const available = (list.available ?? []).find(isComputerUsePlugin);
+    return { installed: false, enabled: false, id: pluginId(available ?? {}) || "computer-use@openai-bundled" };
+  } catch {
+    return { installed: configured, enabled: configured, id: "computer-use@openai-bundled" };
+  }
+}
+
+function enablePluginInConfig(id: string) {
+  mkdirSync(CODEX_HOME, { recursive: true });
+  const file = join(CODEX_HOME, "config.toml");
+  let config = existsSync(file) ? readFileSync(file, "utf8") : "";
+  const header = `[plugins."${id}"]`;
+  const at = config.indexOf(header);
+  if (at >= 0) {
+    const next = config.indexOf("\\n[", at + header.length);
+    const end = next >= 0 ? next : config.length;
+    const section = config.slice(at, end);
+    const updated = /(^|\n)\s*enabled\s*=/.test(section)
+      ? section.replace(/(^|\n)(\s*)enabled\s*=\s*(true|false)/i, "$1$2enabled = true")
+      : `${section.replace(/\s*$/, "")}\\nenabled = true\\n`;
+    config = config.slice(0, at) + updated + config.slice(end);
+  } else {
+    config = `${config.replace(/\s*$/, "")}\\n\\n${header}\\nenabled = true\\n`;
+  }
+  writeFileSync(file, config, "utf8");
+}
+
+async function enableWindowsComputerUse(bin: string) {
+  let state = await windowsComputerUse(bin);
+  if (!state.installed) {
+    try {
+      await execText(bin, ["plugin", "add", state.id, "--json"], 120_000);
+    } catch {
+      await execText(bin, ["plugin", "add", "unified-computer-use@openai-bundled", "--json"], 120_000);
+      state = { installed: true, enabled: false, id: "unified-computer-use@openai-bundled" };
+    }
+  }
+  enablePluginInConfig(state.id);
+  codex.restart();
+}
+
 /**
- * Is the user's Mac ready for bots, and if not, the one next step: the Codex CLI (Bops installs it
+ * Is the user's PC ready for bots, and if not, the one next step: the Codex CLI (Bops installs it
  * when it's missing, once per start and again on Retry), signed in to Codex with ChatGPT, and Codex's
  * Computer Use on (it comes with OpenAI's Codex app for Mac, not the CLI). Checked now and then, after
  * a sign-in ends, and while the setup card waits on the user; the answer lives in state.mac.
@@ -251,7 +325,7 @@ export async function checkMac() {
   const bin = findCodex();
   if (!bin && !onTheMac()) {
     next = "elsewhere";
-    reason = "Computer use works in the Bops desktop app on your PC or Windows PC.";
+    reason = "Computer use works in the Bops desktop app on your local computer.";
   } else if (!bin) {
     if (!installStatus()) installCodex(() => void checkMac().catch(() => {}));
     const failed = installStatus()?.state === "failed" ? installStatus()?.error : undefined;
@@ -259,9 +333,10 @@ export async function checkMac() {
     reason = failed !== undefined ? `Couldn't install Codex. ${failed}` : "Installing Codex";
   } else {
     const config = has(join(CODEX_HOME, "config.toml")) ? readFileSync(join(CODEX_HOME, "config.toml"), "utf8") : "";
-    const computerUseEnabled = /\[plugins\."(unified-)?computer-use@openai-bundled"\]\s*\n\s*enabled\s*=\s*true/.test(config);
-    const computerUse = process.platform === "win32"
-      ? computerUseEnabled
+    const computerUseEnabled = /\[plugins\."(unified-)?computer-use@openai-bundled"\][\s\S]*?enabled\s*=\s*true/i.test(config);
+    const windowsPlugin = WINDOWS ? await windowsComputerUse(bin) : undefined;
+    const computerUse = WINDOWS
+      ? !!windowsPlugin?.installed && !!windowsPlugin.enabled
       : has(join(CODEX_HOME, "computer-use", "Codex Computer Use.app")) && computerUseEnabled;
     try {
       await codex.ready();
@@ -272,7 +347,7 @@ export async function checkMac() {
         reason = codex.login ? "Finish signing in in your browser" : (codex.loginError ?? "Sign in to Codex with your ChatGPT account");
       } else if (!computerUse) {
         next = "computer-use";
-        reason = "Turn on Computer Use in Codex";
+        reason = WINDOWS ? "Enable the bundled Computer Use plugin" : "Turn on Computer Use in Codex";
       } else ready = true;
       if (acct.account?.type === "chatgpt") codex.login = codex.loginError = undefined;
       plan = acct.account?.planType;
@@ -301,7 +376,7 @@ export async function retryCodex() {
 /**
  * Sign in to Codex with ChatGPT through the app server Bops already runs (account/login/start), so it
  * knows the account the moment it's done: Codex's sign-in page opens in the user's browser, and its
- * end (account/login/completed) checks the Mac again. One sign-in at a time: a new one replaces the last.
+ * end (account/login/completed) checks the PC again. One sign-in at a time: a new one replaces the last.
  */
 export async function signInToCodex() {
   await codex.ready();
@@ -325,9 +400,14 @@ export async function signInToCodex() {
  * Open OpenAI's Codex app (`codex app`, which opens its installer when it's missing), where the user
  * turns on Computer Use. It comes only with that app; the CLI can't install it.
  */
-export function openCodexApp() {
+export async function openCodexApp() {
   const bin = findCodex();
   if (!bin) throw new Error("Codex isn't installed yet.");
+  if (WINDOWS) {
+    await enableWindowsComputerUse(bin);
+    await checkMac();
+    return;
+  }
   const child = spawn(bin, ["app", homedir()], { cwd: homedir(), env: agentEnv({ PATH: codexPath() }), stdio: "ignore", detached: true });
   child.on("error", () => {});
   child.unref();

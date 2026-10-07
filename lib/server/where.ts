@@ -22,7 +22,7 @@ export async function chooseWhere(botId: string, goal: string, asked: "mac" | "c
   if (CLOUD_WORDS.test(goal)) return "cloud";
   const b = bot(botId);
   if (b?.runsOn === "mac" || b?.runsOn === "cloud") return b.runsOn;
-  // Without a Mac Bops can use, there's only the cloud.
+  // Without a local computer Bops can use, there's only the cloud.
   if (!mac?.ready) return "cloud";
   const rule = mac.rules.find((r) => new RegExp(`\\b${r.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(goal));
   if (rule) return "mac";
@@ -40,7 +40,7 @@ export async function chooseWhere(botId: string, goal: string, asked: "mac" | "c
           `A bot is about to do \`task\` for ${owner}. It can work on its own cloud computer (a browser and apps in the cloud, isolated from ${owner}, can run long or in parallel, can sign in to sites in \`saved_logins_for_the_cloud\`), or on ${owner}'s own computer (their apps, files and signed-in sessions). Where should it run?`,
         criteria: {
           cloud: "The cloud: it's web work, research, anything a fresh browser can do, or long, parallel or scheduled work",
-          mac: `${owner}'s Mac: it needs an app only on their computer (Messages, Notes, Mail, Photos, Finder, Keynote…), their own files, or a sign-in only their computer has`,
+          mac: `${owner}'s PC: it needs an app only on their computer (Outlook, Word, Excel, File Explorer…), their own files, or a sign-in only their computer has`,
           unsure: "Can't tell from the task; it could reasonably be either",
         },
       },
