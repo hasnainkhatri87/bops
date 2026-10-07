@@ -7,11 +7,11 @@ import { Mascot } from "./mascot";
 import { post } from "./ui";
 
 /*
- * The user's Mac, as a place bots work: whether it's ready, what's waiting on their OK, what's running
+ * The user's PC, as a place bots work: whether it's ready, what's waiting on their OK, what's running
  * there, which apps bots may always use, and the words that send a task there.
  */
 
-export function MacIcon({ size = 14, color = "currentColor" }: { size?: number; color?: string }) {
+export function PCIcon({ size = 14, color = "currentColor" }: { size?: number; color?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" className="shrink-0">
       <rect x="2" y="3" width="12" height="8" rx="1.3" fill="none" stroke={color} strokeWidth="1.3" />
@@ -83,7 +83,7 @@ export function ApprovalCard({ state, approval: a, compact }: { state: AppState;
 }
 
 /** Your PC's settings, in a sheet over the Your PC tab: whether bots can work here, apps they may always use, words that mean the PC. */
-export function MacSettings({ state }: { state: AppState }) {
+export function PCSettings({ state }: { state: AppState }) {
   const m = state.mac;
   const [rule, setRule] = useState("");
   const section = "flex flex-col gap-2";
@@ -164,14 +164,14 @@ export function MacSettings({ state }: { state: AppState }) {
   );
 }
 
-/** One window a bot uses on the user's Mac: live video in the Bops app, else a picture refreshed every second. */
-export function MacWindow({ app, max = 640, className = "" }: { app: string; max?: number; className?: string }) {
+/** One window a bot uses on the user's PC: live video in the Bops app, else a picture refreshed every second. */
+export function PCWindow({ app, max = 640, className = "" }: { app: string; max?: number; className?: string }) {
   const source = useAppWindowSource(app);
   if (source) return <MacStream key={source} sourceId={source} fps={10} maxWidth={max * 2} className={className} />;
   return <MacWindowPicture app={app} max={max} className={className} />;
 }
 
-function MacWindowPicture({ app, max = 640, className = "" }: { app: string; max?: number; className?: string }) {
+function PCWindowPicture({ app, max = 640, className = "" }: { app: string; max?: number; className?: string }) {
   const [tick, setTick] = useState(0);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
@@ -194,7 +194,7 @@ function MacWindowPicture({ app, max = 640, className = "" }: { app: string; max
   );
 }
 
-/** The windows bots are using on the user's Mac right now (or a moment ago): one per bot and app. */
+/** The windows bots are using on the user's PC right now (or a moment ago): one per bot and app. */
 export function useMacTiles(state: AppState | null) {
   const now = useNow2();
   return (state?.sessions ?? [])
@@ -204,7 +204,7 @@ export function useMacTiles(state: AppState | null) {
 }
 
 /** The preview tiles themselves, shared by the corner preview in Bops and its popped-out window. */
-export function MacTiles({ tiles, onOpen, max = 480, tall = false }: { tiles: ReturnType<typeof useMacTiles>; onOpen: () => void; max?: number; tall?: boolean }) {
+export function PCTiles({ tiles, onOpen, max = 480, tall = false }: { tiles: ReturnType<typeof useMacTiles>; onOpen: () => void; max?: number; tall?: boolean }) {
   return (
     <>
       {tiles.map(({ s, app, b }) => (
@@ -230,11 +230,11 @@ const POS_KEY = "bops.macPreview.pos";
 export const PIP_KEY = "bops.macPreview.popped";
 
 /**
- * The windows bots are using on the user's Mac, live, in a corner of Bops (like Codex's and T3's
+ * The windows bots are using on the user's PC, live, in a corner of Bops (like Codex's and T3's
  * previews). Drag the bar to move it anywhere in Bops (it remembers); pop it out into a small
  * window that floats over every app; or fold it into a pill.
  */
-export function MacPreviews({ state, onOpen }: { state: AppState; onOpen: () => void }) {
+export function PCPreviews({ state, onOpen }: { state: AppState; onOpen: () => void }) {
   const [small, setSmall] = useState(false);
   const tiles = useMacTiles(state);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(() => {
