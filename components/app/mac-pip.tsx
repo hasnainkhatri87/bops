@@ -14,7 +14,7 @@ const bridge = () => (window as unknown as { bopsMac?: Bridge }).bopsMac;
  * The PC previews in their own floating window: drag it anywhere on the screen (by its bar), resize
  * it, and it stays on top of other apps. Click a window to jump back to Bops on Your PC.
  */
-export function PCPip() {
+export function MacPip() {
   const state = useAppState();
   const tiles = useMacTiles(state);
   // The Bops window hides its corner preview while this one is open.
