@@ -311,7 +311,7 @@ function Bops({ state }: { state: AppState | null }) {
     setPanelOpen(true);
   };
 
-  /** Show a watched thing: its Mac window in Your PC, or the bot's screen it's on. Seeing it clears its news. */
+  /** Show a watched thing: its PC window in Your PC, or the bot's screen it's on. Seeing it clears its news. */
   const showWatch = (w: Watch) => {
     if (w.mac) openMac();
     else {
@@ -552,7 +552,7 @@ function Bops({ state }: { state: AppState | null }) {
           />
         )}
         {setup && <Setup state={state} onClose={() => setSetup(false)} />}
-        {/* What bots are doing on the user's Mac, live, in the corner (hidden while the Your PC tab is open). */}
+        {/* What bots are doing on the user's PC, live, in the corner (hidden while the Your PC tab is open). */}
         {!(tab?.kind === "mac" && panelOpen) && <MacPreviews state={state} onOpen={openMac} />}
       </div>
     </OpenLink.Provider>
