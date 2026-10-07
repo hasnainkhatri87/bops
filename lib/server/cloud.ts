@@ -4,7 +4,7 @@ import { AI_CREDIT_EMPTY, type CloudSession } from "@/cloud/protocol";
 import { loadOrgoKey, orgoKey } from "./orgo-auth";
 import { onPostgres } from "./persist";
 import { getState, update } from "./store";
-import { directAiEnabled, directAiKey, strictPrivacyEnabled } from "./ai-config";
+import { directAiConfig, directAiEnabled, directAiKey, strictPrivacyEnabled } from "./ai-config";
 
 /**
  * Bops Cloud (cloud/README.md): the server Orgo runs so that Orgo's provider keys never sit on a
