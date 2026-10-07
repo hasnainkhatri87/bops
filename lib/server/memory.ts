@@ -7,7 +7,7 @@ import { cloudOn, cloudProxy, cloudSessionNow } from "./cloud";
 import { chose, decide, yes, type Question } from "./decide";
 import { addMessage, bot, getState, ownerName, update } from "./store";
 import { recordTokens } from "./usage";
-import { aiModel, directAiEnabled } from "./ai-config";
+import { aiModel, strictPrivacyEnabled } from "./ai-config";
 
 /**
  * Long-term memory, through Honcho (honcho.dev). Each workspace has a memory bank (a Honcho
@@ -26,7 +26,7 @@ import { aiModel, directAiEnabled } from "./ai-config";
  * there carries the user's own prefix (bankFor).
  */
 
-const on = () => (directAiEnabled() ? !!process.env.HONCHO_API_KEY : cloudOn() ? !!cloudSessionNow()?.honcho : !!process.env.HONCHO_API_KEY);
+const on = () => (strictPrivacyEnabled() ? !!process.env.HONCHO_API_KEY : cloudOn() ? !!cloudSessionNow()?.honcho : !!process.env.HONCHO_API_KEY);
 const MODEL = () => aiModel("chat");
 
 /** Which Honcho workspace (bank) a Bops workspace's memory lives in, and the user's peer in it. */
@@ -39,7 +39,7 @@ const clean = (s: string) => s.replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 200);
 const ownBank = (ws: string): Binding =>
   ws !== MAIN_WORKSPACE
     ? { bank: `bops-${clean(ws)}`, peer: "user" }
-    : cloudOn() && !directAiEnabled()
+    : cloudOn() && !strictPrivacyEnabled()
       ? { bank: "bops", peer: "user" }
       : { bank: process.env.HONCHO_WORKSPACE_ID ?? "bops", peer: process.env.HONCHO_USER_PEER ?? "user" };
 
