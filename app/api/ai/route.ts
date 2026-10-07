@@ -53,16 +53,19 @@ export async function POST(req: Request) {
     if (sessionModel !== undefined) next.sessionModel = sessionModel;
     if (hardModel !== undefined) next.hardModel = hardModel;
 
-    // Validate/store non-secret settings before touching the protected secret.
-    saveDirectAiConfig({ ...current, ...next });
+    const existingKey = await directAiKey();
+    const suppliedKey = body.apiKey !== undefined ? text(body.apiKey, "API key", 4096) : undefined;
+    const willHaveKey = !body.clearKey && (!!suppliedKey || !!existingKey);
+    const willEnable = next.enabled ?? current.enabled;
+    if (willEnable && !willHaveKey)
+      return Response.json({ ...(await directAiPublic()), error: "Add an API key before turning on Direct AI." }, { status: 400 });
+
+    // Validate/store non-secret settings only after the key requirement is satisfied.
+    saveDirectAiConfig({ ...current, ...next, ...(body.clearKey ? { enabled: false } : {}) });
     if (body.clearKey) await setDirectAiKey(null);
-    else if (body.apiKey !== undefined) {
-      const key = text(body.apiKey, "API key", 4096);
-      if (key) await setDirectAiKey(key);
-    }
+    else if (suppliedKey) await setDirectAiKey(suppliedKey);
 
     const saved = await directAiPublic();
-    if (saved.enabled && !saved.hasKey) return Response.json({ ...saved, error: "Direct AI is on, but no API key is saved." }, { status: 400 });
     const tested = body.test ? await testConnection() : undefined;
     return Response.json({ ...saved, tested }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
