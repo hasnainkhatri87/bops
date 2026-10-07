@@ -14,6 +14,8 @@ export type DirectAiConfig = {
   hardModel: string;
   /** Off by default: otherwise the key is copied to the user's Orgo VM for cloud-computer agent runs. */
   allowCloudExecutors: boolean;
+  /** Strong privacy: disables Bops Cloud proxies, state backup and webhook tunnel entirely. */
+  blockBopsCloud: boolean;
 };
 
 const SECRET = "ai-api:key:v1";
@@ -34,6 +36,7 @@ const defaults = (): DirectAiConfig => ({
   sessionModel: process.env.BOPS_SESSION_MODEL ?? "gpt-6.1-sol",
   hardModel: process.env.BOPS_HARD_MODEL ?? "gpt-6-astra",
   allowCloudExecutors: false,
+  blockBopsCloud: true,
 });
 
 export function normalizeAiBaseUrl(value: string) {
@@ -57,6 +60,7 @@ export function directAiConfig(): DirectAiConfig {
       sessionModel: typeof raw.sessionModel === "string" && raw.sessionModel.trim() ? raw.sessionModel.trim() : d.sessionModel,
       hardModel: typeof raw.hardModel === "string" && raw.hardModel.trim() ? raw.hardModel.trim() : d.hardModel,
       allowCloudExecutors: raw.allowCloudExecutors === true,
+      blockBopsCloud: raw.blockBopsCloud !== false,
     };
   } catch {
     return d;
@@ -72,6 +76,7 @@ export function saveDirectAiConfig(input: Partial<DirectAiConfig>) {
     sessionModel: (input.sessionModel ?? was.sessionModel).trim() || defaults().sessionModel,
     hardModel: (input.hardModel ?? was.hardModel).trim() || defaults().hardModel,
     allowCloudExecutors: input.allowCloudExecutors ?? was.allowCloudExecutors,
+    blockBopsCloud: input.blockBopsCloud ?? was.blockBopsCloud,
   };
   mkdirSync(dirname(file()), { recursive: true });
   const tmp = `${file()}.tmp`;
