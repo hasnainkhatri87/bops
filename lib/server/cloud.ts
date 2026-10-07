@@ -4,7 +4,7 @@ import { AI_CREDIT_EMPTY, type CloudSession } from "@/cloud/protocol";
 import { loadOrgoKey, orgoKey } from "./orgo-auth";
 import { onPostgres } from "./persist";
 import { getState, update } from "./store";
-import { directAiConfig, directAiEnabled, directAiKey } from "./ai-config";
+import { directAiEnabled, directAiKey, strictPrivacyEnabled } from "./ai-config";
 
 /**
  * Bops Cloud (cloud/README.md): the server Orgo runs so that Orgo's provider keys never sit on a
@@ -21,11 +21,7 @@ import { directAiConfig, directAiEnabled, directAiKey } from "./ai-config";
 export const cloudUrl = () => (process.env.BOPS_CLOUD_URL || "https://bops.orgo.ai/api").replace(/\/+$/, "");
 
 /** Whether services go through Bops Cloud: signed in with Orgo, in the app on a Mac, and not self-hosting. */
-export const cloudOn = () => {
-  const ai = directAiConfig();
-  if (ai.enabled && ai.blockBopsCloud) return false;
-  return !!orgoKey() && process.env.BOPS_SELF_HOSTED !== "1" && !onPostgres();
-};
+export const cloudOn = () => !strictPrivacyEnabled() && !!orgoKey() && process.env.BOPS_SELF_HOSTED !== "1" && !onPostgres();
 
 /**
  * A call to Bops Cloud that didn't work, in words the app can show. `status` is the cloud's HTTP status
@@ -134,9 +130,9 @@ export function forgetCloudSession() {
 
 /** Where a provider is reached through Bops Cloud and the key to reach it with (the user's Orgo key), or null when the app calls it directly. */
 export function cloudProxy(provider: "openai" | "agentphone" | "honcho" | "composio" | "typesafe") {
-  // Direct AI privacy keeps model prompts, judgments, and long-term-memory content off Bops Cloud.
-  // Non-AI integrations (phone/apps) keep their existing routing when the user uses them.
-  if (directAiEnabled() && (provider === "openai" || provider === "typesafe" || provider === "honcho")) return null;
+  // The model itself is always direct in BYOK mode. Strict privacy disables cloudOn(), which
+  // also prevents Typesafe, Honcho and the other Bops Cloud-backed services from using the cloud.
+  if (provider === "openai" && directAiEnabled()) return null;
   const key = cloudOn() ? orgoKey() : null;
   return key ? { url: `${cloudUrl()}/proxy/${provider}`, key } : null;
 }
