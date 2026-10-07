@@ -130,7 +130,9 @@ export function forgetCloudSession() {
 
 /** Where a provider is reached through Bops Cloud and the key to reach it with (the user's Orgo key), or null when the app calls it directly. */
 export function cloudProxy(provider: "openai" | "agentphone" | "honcho" | "composio" | "typesafe") {
-  if (provider === "openai" && directAiEnabled()) return null;
+  // Direct AI privacy keeps model prompts, judgments, and long-term-memory content off Bops Cloud.
+  // Non-AI integrations (phone/apps) keep their existing routing when the user uses them.
+  if (directAiEnabled() && (provider === "openai" || provider === "typesafe" || provider === "honcho")) return null;
   const key = cloudOn() ? orgoKey() : null;
   return key ? { url: `${cloudUrl()}/proxy/${provider}`, key } : null;
 }
