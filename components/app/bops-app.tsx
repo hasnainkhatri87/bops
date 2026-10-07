@@ -950,6 +950,7 @@ type AiApiInfo = {
   sessionModel: string;
   hardModel: string;
   allowCloudExecutors: boolean;
+  blockBopsCloud: boolean;
   hasKey: boolean;
   privacy: "direct";
   error?: string;
@@ -982,6 +983,7 @@ function AiApiSettings() {
         sessionModel: info.sessionModel,
         hardModel: info.hardModel,
         allowCloudExecutors: info.allowCloudExecutors,
+        blockBopsCloud: info.blockBopsCloud,
         ...(key.trim() ? { apiKey: key.trim() } : {}),
         test,
       };
@@ -1025,7 +1027,7 @@ function AiApiSettings() {
       <div className="flex flex-col gap-3 rounded-[14px] p-3.5 shadow-[0_0_0_1px_#E6E6E3]">
         <div className="flex items-start gap-2 rounded-[10px] bg-[#F5F7F2] px-3 py-2 text-[12px] leading-[17px] text-[#3A3A38]">
           <span className="mt-1 size-2 shrink-0 rounded-full bg-[#2BB673]" />
-          <span><b>No Bops AI relay.</b> Your AI requests go from this PC to the API URL below. The chosen AI provider still receives what you send to its models. Other Bops integrations only communicate when you use those features.</span>
+          <span><b>Direct AI.</b> Your AI requests go from this PC to the API URL below. The chosen AI provider still receives what you send to its models. Turn on strict privacy below to block Bops Cloud completely.</span>
         </div>
         <label className="flex items-center gap-3">
           <span className="w-[122px] shrink-0 text-[12.5px] font-medium">API URL</span>
@@ -1044,6 +1046,13 @@ function AiApiSettings() {
           <span className="text-[12.5px] font-medium">Hard-task model</span>
           <input value={info.hardModel} onChange={(e) => change("hardModel", e.target.value)} className={input} />
         </div>
+        <label className="flex cursor-pointer items-start gap-2.5 border-t border-[#F0F0EE] pt-3">
+          <input type="checkbox" checked={info.blockBopsCloud} onChange={(e) => change("blockBopsCloud", e.target.checked)} className="mt-0.5" />
+          <span className="flex flex-col">
+            <span className="text-[12.5px] font-medium">Strict privacy: block Bops Cloud</span>
+            <span className="text-[11.5px] leading-4 text-[#6B6B6B]">Recommended for no Bops data sharing. Disables Bops Cloud AI proxies, state backup and webhook tunnel. Hosted Composio, Honcho, phone and similar cloud-backed services will be unavailable unless you self-host their keys.</span>
+          </span>
+        </label>
         <label className="flex cursor-pointer items-start gap-2.5 border-t border-[#F0F0EE] pt-3">
           <input type="checkbox" checked={info.allowCloudExecutors} onChange={(e) => change("allowCloudExecutors", e.target.checked)} className="mt-0.5" />
           <span className="flex flex-col">
