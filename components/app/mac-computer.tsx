@@ -46,7 +46,7 @@ type Item = {
   windowId?: number;
 };
 
-export function MacComputer({
+export function PCComputer({
   state,
   mode,
   onFocus,
@@ -526,7 +526,7 @@ function SettingsButton({ onClick, label }: { onClick: () => void; label?: boole
 }
 
 /** The settings, out of the way of the screen: a sheet over the tab. Click outside to close. */
-function MacSettingsSheet({ state, onClose }: { state: AppState; onClose: () => void }) {
+function PCSettingsSheet({ state, onClose }: { state: AppState; onClose: () => void }) {
   return (
     <div onClick={onClose} className="absolute inset-0 z-50 flex items-start justify-center bg-black/10 p-4 backdrop-blur-[2px]">
       <div onClick={(e) => e.stopPropagation()} className="relative flex max-h-full w-full max-w-[520px] flex-col overflow-hidden rounded-[20px] bg-white shadow-[0_0_0_1px_#0000000F,0_24px_60px_-20px_#00000066]">
@@ -553,7 +553,7 @@ function watchPicks(app: string, title: string) {
  * Watch a window on your PC: pick the window (when it isn't the one on screen), say what's worth
  * a heads-up, done. Jev reads the window's text when it changes; the main bot tells you in its chat.
  */
-function MacWatchSheet({ target, onClose }: { target: { app?: string; title?: string; windowId?: number; watch?: Watch } | null; onClose: () => void }) {
+function PCWatchSheet({ target, onClose }: { target: { app?: string; title?: string; windowId?: number; watch?: Watch } | null; onClose: () => void }) {
   const [windows, setWindows] = useState<{ app: string; title: string; windowId: number }[] | null>(null);
   const [picked, setPicked] = useState(target?.app && target.windowId !== undefined ? target : null);
   const [lookFor, setLookFor] = useState(target?.watch?.lookFor ?? "");
