@@ -86,6 +86,10 @@ export function saveDirectAiConfig(input: Partial<DirectAiConfig>) {
 }
 
 export const directAiEnabled = () => directAiConfig().enabled;
+export const strictPrivacyEnabled = () => {
+  const c = directAiConfig();
+  return c.enabled && c.blockBopsCloud;
+};
 
 export async function directAiKey() {
   return getSecret(SECRET);
