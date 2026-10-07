@@ -1,6 +1,7 @@
 import "server-only";
 import { execFile } from "node:child_process";
 import { openaiClient } from "./openai-client";
+import { aiModel } from "./ai-config";
 import type { ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -40,9 +41,9 @@ import { recordTokens } from "./usage";
  */
 
 const client = openaiClient();
-const SESSION_MODEL = process.env.BOPS_SESSION_MODEL ?? "gpt-6.1-sol";
-/** For tasks Jev rates hard: GPT-6 Astra, what OpenAI's dots run on (slower and about 5× the price). */
-const HARD_MODEL = process.env.BOPS_HARD_MODEL ?? "gpt-6-astra";
+const SESSION_MODEL = () => aiModel("session");
+/** Hard tasks use the configured high-capability model. */
+const HARD_MODEL = () => aiModel("hard");
 /** Helpers a thread can run at once, each on its own screen (a bot has 4). */
 const MAX_HELPERS = 3;
 const TURN_TIMEOUT_MS = 10 * 60_000;
@@ -717,7 +718,7 @@ export async function suggestFor(sessionId: string) {
 async function suggestReplies(task: string, recent: Session["replies"], question: string, botId?: string) {
   const owner = ownerName();
   const res = await client.responses.create({
-    model: process.env.BOPS_CHAT_MODEL ?? "gpt-6.1-sol",
+    model: aiModel("chat"),
     reasoning: { effort: "low" },
     instructions:
       `A bot asked ${owner} something while working on a task. Suggest 2 or 3 short replies (2 to 8 words each) that ${owner} could tap to answer it, written the way ${owner} would say them. Make them different real answers, not "I don't know". When the question shows the bot misunderstood, include a reply that clears it up. Don't suggest "never mind" or "stop": Bops already has that button. No full stops at the end.`,
@@ -866,7 +867,7 @@ async function run(sessionId: string) {
       const created = (await client.beta.agents.sessions.create({
         agent: {
           // Hard tasks get the model Dots runs on; the rest the faster, cheaper one.
-          model: session(sessionId)!.effort === "high" ? HARD_MODEL : SESSION_MODEL,
+          model: session(sessionId)!.effort === "high" ? HARD_MODEL() : SESSION_MODEL(),
           // Reasoning summaries become the thread's live caption ("checking the pricing page…").
           reasoning: { effort: session(sessionId)!.effort ?? "medium", summary: "auto" },
           // Its apps reach Bops from an Orgo computer over the tailnet (screen_mcp.py, when its key file
@@ -1278,7 +1279,7 @@ async function runTurn(sessionId: string, agentSessionId: string, input: string,
   const turnOwner = new Map<string, string | null>();
   // Each turn's tokens (the thread's and its helpers'), counted once when it ends; `seen` keeps it once.
   const s = session(sessionId);
-  const model = s?.effort === "high" ? HARD_MODEL : SESSION_MODEL;
+  const model = s?.effort === "high" ? HARD_MODEL() : SESSION_MODEL();
   // Whose state this turn belongs to: tokens counted after a hosted server swapped users are dropped (stateEpoch).
   const epoch = stateEpoch();
   const countTurn = (turnId: string, usage: TokenCount) => {
