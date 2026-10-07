@@ -7,6 +7,7 @@ import { cloudOn, cloudProxy, cloudSessionNow } from "./cloud";
 import { chose, decide, yes, type Question } from "./decide";
 import { addMessage, bot, getState, ownerName, update } from "./store";
 import { recordTokens } from "./usage";
+import { aiModel, strictPrivacyEnabled } from "./ai-config";
 
 /**
  * Long-term memory, through Honcho (honcho.dev). Each workspace has a memory bank (a Honcho
@@ -25,8 +26,8 @@ import { recordTokens } from "./usage";
  * there carries the user's own prefix (bankFor).
  */
 
-const on = () => (cloudOn() ? !!cloudSessionNow()?.honcho : !!process.env.HONCHO_API_KEY);
-const MODEL = process.env.BOPS_CHAT_MODEL ?? process.env.BOPS_SAM_MODEL ?? "gpt-6.1-sol";
+const on = () => (strictPrivacyEnabled() ? !!process.env.HONCHO_API_KEY : cloudOn() ? !!cloudSessionNow()?.honcho : !!process.env.HONCHO_API_KEY);
+const MODEL = () => aiModel("chat");
 
 /** Which Honcho workspace (bank) a Bops workspace's memory lives in, and the user's peer in it. */
 export type Binding = { bank: string; peer: string };
@@ -38,7 +39,7 @@ const clean = (s: string) => s.replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 200);
 const ownBank = (ws: string): Binding =>
   ws !== MAIN_WORKSPACE
     ? { bank: `bops-${clean(ws)}`, peer: "user" }
-    : cloudOn()
+    : cloudOn() && !strictPrivacyEnabled()
       ? { bank: "bops", peer: "user" }
       : { bank: process.env.HONCHO_WORKSPACE_ID ?? "bops", peer: process.env.HONCHO_USER_PEER ?? "user" };
 
@@ -343,7 +344,7 @@ export function rememberMessage(ws: string, chatId: string, messageId: string, s
     saveToMemory(ws, "chat", chatId, [{ who: "owner", text: said }], metadata);
     if (said.trim().length < 8 || (yes(a?.worth) ?? 0) < 0.6) return;
     const res = await openai.responses.create({
-      model: MODEL,
+      model: MODEL(),
       reasoning: { effort: "low" },
       instructions: `${owner} told their assistant something about themselves. Write each lasting fact in it as one plain sentence in the third person, starting with "${owner}" ("${owner} is vegetarian.", "${owner}'s sister is Ana."). One per line, at most three. Only what they said, nothing guessed. If there's no lasting fact, write NONE.`,
       input: said.slice(0, 2000),

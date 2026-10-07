@@ -4,6 +4,7 @@ import { AI_CREDIT_EMPTY, type CloudSession } from "@/cloud/protocol";
 import { loadOrgoKey, orgoKey } from "./orgo-auth";
 import { onPostgres } from "./persist";
 import { getState, update } from "./store";
+import { directAiConfig, directAiEnabled, directAiKey, strictPrivacyEnabled } from "./ai-config";
 
 /**
  * Bops Cloud (cloud/README.md): the server Orgo runs so that Orgo's provider keys never sit on a
@@ -20,7 +21,7 @@ import { getState, update } from "./store";
 export const cloudUrl = () => (process.env.BOPS_CLOUD_URL || "https://bops.orgo.ai/api").replace(/\/+$/, "");
 
 /** Whether services go through Bops Cloud: signed in with Orgo, in the app on a Mac, and not self-hosting. */
-export const cloudOn = () => !!orgoKey() && process.env.BOPS_SELF_HOSTED !== "1" && !onPostgres();
+export const cloudOn = () => !strictPrivacyEnabled() && !!orgoKey() && process.env.BOPS_SELF_HOSTED !== "1" && !onPostgres();
 
 /**
  * A call to Bops Cloud that didn't work, in words the app can show. `status` is the cloud's HTTP status
@@ -38,6 +39,7 @@ export class CloudError extends Error {
 
 /** A request to Bops Cloud as the signed-in user (their Orgo key as Bearer). `fetchImpl` lets a test check the wire shape. */
 export async function cloudFetch(path: string, init: RequestInit = {}, fetchImpl: typeof fetch = fetch): Promise<Response> {
+  if (strictPrivacyEnabled()) throw new CloudError("Bops Cloud is blocked by strict privacy mode.");
   const key = orgoKey();
   if (!key) throw new CloudError("Sign in with Orgo first.");
   const headers = new Headers(init.headers);
@@ -129,6 +131,9 @@ export function forgetCloudSession() {
 
 /** Where a provider is reached through Bops Cloud and the key to reach it with (the user's Orgo key), or null when the app calls it directly. */
 export function cloudProxy(provider: "openai" | "agentphone" | "honcho" | "composio" | "typesafe") {
+  // The model itself is always direct in BYOK mode. Strict privacy disables cloudOn(), which
+  // also prevents Typesafe, Honcho and the other Bops Cloud-backed services from using the cloud.
+  if (provider === "openai" && directAiEnabled()) return null;
   const key = cloudOn() ? orgoKey() : null;
   return key ? { url: `${cloudUrl()}/proxy/${provider}`, key } : null;
 }
@@ -138,6 +143,14 @@ export function cloudProxy(provider: "openai" | "agentphone" | "honcho" | "compo
  * Bops Cloud's restricted, spend-capped one, or OPENAI_EXECUTOR_API_KEY.
  */
 export async function executorKey(): Promise<string> {
+  if (directAiEnabled()) {
+    const config = directAiConfig();
+    if (!config.allowCloudExecutors)
+      throw new CloudError("Direct AI privacy mode keeps your API key off cloud computers. Use This PC, or enable cloud-computer key sharing in Settings → AI API.");
+    const key = await directAiKey();
+    if (!key) throw new CloudError("Direct AI is enabled, but no local API key is saved.");
+    return key;
+  }
   if (!cloudOn()) return process.env.OPENAI_EXECUTOR_API_KEY ?? "";
   const key = (await cloudSession()).openai?.executorKey;
   if (!key) throw new CloudError("Bops Cloud can't run tasks on computers right now.");
@@ -153,7 +166,7 @@ export async function executorKey(): Promise<string> {
  */
 export function outOfCredits(e: unknown): boolean {
   if (e instanceof CloudError) return e.status === 402 && (!e.code || e.code === AI_CREDIT_EMPTY);
-  return e instanceof APIError && e.status === 402 && cloudOn();
+  return e instanceof APIError && e.status === 402 && cloudOn() && !directAiEnabled();
 }
 
 /** What a bot says, once, in place of the error, when the credit ran out under it. */
@@ -180,6 +193,7 @@ const CREDIT_RECHECK_MS = 5 * 60_000;
  * minutes Orgo is asked again (lib/server/plan.ts readBopsPlan clears it when there's credit).
  */
 export async function creditsOut(): Promise<boolean> {
+  if (directAiEnabled()) return false;
   const c = getState().credits;
   if (!c?.out || !cloudOn()) return false;
   if (Date.now() - c.at < CREDIT_RECHECK_MS) return true;

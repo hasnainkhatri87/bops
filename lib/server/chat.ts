@@ -3,6 +3,7 @@ import { isSecret, learn, memoryBlock, memoryOn, recall, rememberMessage, saveTo
 import { APP_TOOLS, findAppActions, runAppAction } from "./composio";
 import { appsNote, placesNote } from "./skills";
 import { openaiClient } from "./openai-client";
+import { aiModel } from "./ai-config";
 import { contactLine, createBot } from "./bots";
 import { creditsOut, noteOutOfCredit, OUT_OF_CREDIT } from "./cloud";
 import { noOwnComputer } from "./plan";
@@ -31,7 +32,7 @@ import { recordTokens } from "./usage";
  */
 
 const client = openaiClient();
-const CHAT_MODEL = process.env.BOPS_CHAT_MODEL ?? process.env.BOPS_SAM_MODEL ?? "gpt-6.1-sol";
+const CHAT_MODEL = () => aiModel("chat");
 /** Texting should feel instant: chat turns mostly reply and route, so they think lightly. Threads think harder. */
 const CHAT_REASONING = { effort: (process.env.BOPS_CHAT_EFFORT ?? "low") as "low" | "medium" | "high" };
 
@@ -297,7 +298,7 @@ async function acknowledge(b: Bot | undefined, request: string, task: string, pa
     const res = await Promise.race([
       client.responses
         .create({
-          model: CHAT_MODEL,
+          model: CHAT_MODEL(),
           reasoning: { effort: "low" },
           instructions: `You are ${b?.name ?? "a bot"}, texting ${ownerName()} back. They just added something to a task you're already doing${passTo ? ` (${passTo} is doing it; say you'll pass it on)` : ""}. Reply with one short, natural line about what you'll do now, in words that fit what they said, like a friend would text. The task isn't done yet: never give an answer or a result, and never say it's done. No "On it.", no quotes, no emoji, under 12 words.`,
           input: JSON.stringify({ task, owner_said: request }),
@@ -441,7 +442,7 @@ async function askTeammate(asker: Bot, toId: string, question: string, chatId: s
       `This is your conversation with ${asker.name} (${asker.role}), your teammate; ${asker.name} asks you things while helping ${owner}. Answer ${asker.name} in one to three plain sentences, from what you know. If you don't know, say so plainly and say how you'd find out. You can't start tasks or ask anyone else here.`,
     ].join("\n");
     const res = await client.responses.create({
-      model: CHAT_MODEL,
+      model: CHAT_MODEL(),
       reasoning: CHAT_REASONING,
       instructions,
       input: history(pair, t.id).slice(-16),
@@ -614,7 +615,7 @@ async function botTurn(botId: string, chatId: string, opts: TurnOptions = {}): P
       // Searched only when knowing the user helps with this message (Jev); small talk and plain commands skip it.
       await memoryBlock(workspaceOf(b), lastWords(chatId), 2500, { search: await needsMemory(lastWords(chatId)) }),
     ].join("\n");
-    let response = await client.responses.create({ model: CHAT_MODEL, reasoning: CHAT_REASONING, instructions, input: history(chatId, botId), tools });
+    let response = await client.responses.create({ model: CHAT_MODEL(), reasoning: CHAT_REASONING, instructions, input: history(chatId, botId), tools });
     recordTokens("chat", response.model, response.usage, botId);
     // App lookups come back to the model before it answers (a few rounds at most). Other tools
     // called along the way (start_task…) are kept and handled with the final answer's.
@@ -683,7 +684,7 @@ async function botTurn(botId: string, chatId: string, opts: TurnOptions = {}): P
       const rest = response.output.filter((o) => o.type === "function_call" && !calls.includes(o as never)) as { call_id: string }[];
       earlier.push(...(rest as never[]));
       response = await client.responses.create({
-        model: CHAT_MODEL,
+        model: CHAT_MODEL(),
         reasoning: CHAT_REASONING,
         instructions,
         previous_response_id: response.id,

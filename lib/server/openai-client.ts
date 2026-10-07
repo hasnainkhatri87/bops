@@ -1,5 +1,6 @@
 import OpenAI, { type ClientOptions } from "openai";
 import { cloudProxy } from "./cloud";
+import { directAiConfig, directAiEnabled, directAiKey } from "./ai-config";
 
 /**
  * An OpenAI client that finds its key when it makes a call, not when its module loads. Signed in
@@ -13,16 +14,22 @@ export function openaiClient(opts: Omit<ClientOptions, "apiKey"> = {}) {
   const client = new OpenAI({
     ...opts,
     apiKey: async () => {
+      if (directAiEnabled()) {
+        const key = await directAiKey();
+        if (!key) throw new OpenAI.OpenAIError("Direct AI is enabled, but no local API key is saved. Open Settings → AI API.");
+        return key;
+      }
       const via = cloudProxy("openai");
       if (via) return via.key;
       const key = process.env.OPENAI_API_KEY;
-      if (!key) throw new OpenAI.OpenAIError(process.env.BOPS_SELF_HOSTED === "1" ? "No OpenAI key is set: add OPENAI_API_KEY to .env.local." : "Sign in with Orgo first.");
+      if (!key) throw new OpenAI.OpenAIError(process.env.BOPS_SELF_HOSTED === "1" ? "No OpenAI key is set: add OPENAI_API_KEY to .env.local." : "Sign in with Orgo first or add your own AI API key in Settings.");
       return key;
     },
   });
   let direct = client.baseURL;
   Object.defineProperty(client, "baseURL", {
     get: () => {
+      if (directAiEnabled()) return directAiConfig().baseUrl;
       const via = cloudProxy("openai");
       return via ? `${via.url}/v1` : direct;
     },
