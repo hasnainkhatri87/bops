@@ -21,7 +21,11 @@ import { directAiConfig, directAiEnabled, directAiKey } from "./ai-config";
 export const cloudUrl = () => (process.env.BOPS_CLOUD_URL || "https://bops.orgo.ai/api").replace(/\/+$/, "");
 
 /** Whether services go through Bops Cloud: signed in with Orgo, in the app on a Mac, and not self-hosting. */
-export const cloudOn = () => !!orgoKey() && process.env.BOPS_SELF_HOSTED !== "1" && !onPostgres();
+export const cloudOn = () => {
+  const ai = directAiConfig();
+  if (ai.enabled && ai.blockBopsCloud) return false;
+  return !!orgoKey() && process.env.BOPS_SELF_HOSTED !== "1" && !onPostgres();
+};
 
 /**
  * A call to Bops Cloud that didn't work, in words the app can show. `status` is the cloud's HTTP status
