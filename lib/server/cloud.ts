@@ -39,6 +39,7 @@ export class CloudError extends Error {
 
 /** A request to Bops Cloud as the signed-in user (their Orgo key as Bearer). `fetchImpl` lets a test check the wire shape. */
 export async function cloudFetch(path: string, init: RequestInit = {}, fetchImpl: typeof fetch = fetch): Promise<Response> {
+  if (strictPrivacyEnabled()) throw new CloudError("Bops Cloud is blocked by strict privacy mode.");
   const key = orgoKey();
   if (!key) throw new CloudError("Sign in with Orgo first.");
   const headers = new Headers(init.headers);
