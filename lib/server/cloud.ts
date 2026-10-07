@@ -4,6 +4,7 @@ import { AI_CREDIT_EMPTY, type CloudSession } from "@/cloud/protocol";
 import { loadOrgoKey, orgoKey } from "./orgo-auth";
 import { onPostgres } from "./persist";
 import { getState, update } from "./store";
+import { directAiConfig, directAiEnabled, directAiKey } from "./ai-config";
 
 /**
  * Bops Cloud (cloud/README.md): the server Orgo runs so that Orgo's provider keys never sit on a
@@ -129,6 +130,7 @@ export function forgetCloudSession() {
 
 /** Where a provider is reached through Bops Cloud and the key to reach it with (the user's Orgo key), or null when the app calls it directly. */
 export function cloudProxy(provider: "openai" | "agentphone" | "honcho" | "composio" | "typesafe") {
+  if (provider === "openai" && directAiEnabled()) return null;
   const key = cloudOn() ? orgoKey() : null;
   return key ? { url: `${cloudUrl()}/proxy/${provider}`, key } : null;
 }
@@ -138,6 +140,14 @@ export function cloudProxy(provider: "openai" | "agentphone" | "honcho" | "compo
  * Bops Cloud's restricted, spend-capped one, or OPENAI_EXECUTOR_API_KEY.
  */
 export async function executorKey(): Promise<string> {
+  if (directAiEnabled()) {
+    const config = directAiConfig();
+    if (!config.allowCloudExecutors)
+      throw new CloudError("Direct AI privacy mode keeps your API key off cloud computers. Use This PC, or enable cloud-computer key sharing in Settings → AI API.");
+    const key = await directAiKey();
+    if (!key) throw new CloudError("Direct AI is enabled, but no local API key is saved.");
+    return key;
+  }
   if (!cloudOn()) return process.env.OPENAI_EXECUTOR_API_KEY ?? "";
   const key = (await cloudSession()).openai?.executorKey;
   if (!key) throw new CloudError("Bops Cloud can't run tasks on computers right now.");
@@ -153,7 +163,7 @@ export async function executorKey(): Promise<string> {
  */
 export function outOfCredits(e: unknown): boolean {
   if (e instanceof CloudError) return e.status === 402 && (!e.code || e.code === AI_CREDIT_EMPTY);
-  return e instanceof APIError && e.status === 402 && cloudOn();
+  return e instanceof APIError && e.status === 402 && cloudOn() && !directAiEnabled();
 }
 
 /** What a bot says, once, in place of the error, when the credit ran out under it. */
@@ -180,6 +190,7 @@ const CREDIT_RECHECK_MS = 5 * 60_000;
  * minutes Orgo is asked again (lib/server/plan.ts readBopsPlan clears it when there's credit).
  */
 export async function creditsOut(): Promise<boolean> {
+  if (directAiEnabled()) return false;
   const c = getState().credits;
   if (!c?.out || !cloudOn()) return false;
   if (Date.now() - c.at < CREDIT_RECHECK_MS) return true;
