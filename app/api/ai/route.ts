@@ -44,6 +44,7 @@ export async function POST(req: Request) {
     const next: Partial<DirectAiConfig> = {};
     if (body.enabled !== undefined) next.enabled = body.enabled === true;
     if (body.allowCloudExecutors !== undefined) next.allowCloudExecutors = body.allowCloudExecutors === true;
+    if (body.blockBopsCloud !== undefined) next.blockBopsCloud = body.blockBopsCloud === true;
     const baseUrl = text(body.baseUrl, "API URL", 500);
     const chatModel = text(body.chatModel, "Chat model");
     const sessionModel = text(body.sessionModel, "Session model");
@@ -66,6 +67,9 @@ export async function POST(req: Request) {
     else if (suppliedKey) await setDirectAiKey(suppliedKey);
 
     const saved = await directAiPublic();
+    const { ensureCloud, stopCloud } = await import("@/lib/server/cloud-tunnel");
+    if (saved.enabled && saved.blockBopsCloud) await stopCloud();
+    else ensureCloud();
     const tested = body.test ? await testConnection() : undefined;
     return Response.json({ ...saved, tested }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
