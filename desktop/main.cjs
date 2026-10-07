@@ -228,7 +228,7 @@ ipcMain.handle("mac-screens", async () => {
   }));
   // The display Bops is on: showing it shows Bops inside Bops, so the tab prefers another.
   const win = BrowserWindow.getAllWindows()[0];
-  const bopsOn = win ? String(screen.getDisplayMatching(win.getBounds()).id) : undefined;
+  const bopsOn = mainWin ? String(screen.getDisplayMatching(mainWin.getBounds()).id) : undefined;
   if (access !== "granted") return { access, displays, sources: [], bopsOn };
   const list = await desktopCapturer.getSources({ types: ["screen", "window"], thumbnailSize: { width: 0, height: 0 } });
   return { access, displays, bopsOn, sources: list.map((s) => ({ id: s.id, name: s.name, displayId: s.display_id || undefined })) };
