@@ -43,7 +43,7 @@ const ITEMS: Item[] = ["screen", "microphone", "notifications", "computer-use", 
 /** The OS permissions setup asks for. Accessibility isn't one: Bops itself never drives other apps. */
 const ASKED: PermId[] = ["microphone", "notifications", "screen"];
 
-/** Runs `fn` now, every few seconds, and whenever the window comes back (from System Settings, say). */
+/** Runs `fn` now, every few seconds, and whenever the window comes back (from Windows Settings, say). */
 function useWhileOpen(fn: () => void, every = 3000) {
   const ref = useRef(fn);
   useEffect(() => {
@@ -64,7 +64,7 @@ function useWhileOpen(fn: () => void, every = 3000) {
   }, [every]);
 }
 
-/** This PC's permissions for Bops, read live, and whether Screen Recording waits on a restart. */
+/** This PC's permissions for Bops, read live, and whether screen capture waits on a restart. */
 function usePermissions(every: number) {
   const inApp = useMacApp();
   const [status, setStatus] = useState<Partial<Record<PermId, PermStatus>> | null>(null);
@@ -122,7 +122,7 @@ function useRelay(every: number) {
 function useSetupItems(state: AppState, slow = false) {
   const perms = usePermissions(slow ? 15_000 : 3000);
   const relay = useRelay(slow ? 30_000 : 5000);
-  // Grants made in System Settings show up through the polling; this is what was opened there.
+  // Grants made in Windows Settings show up through the polling; this is what was opened there.
   const [sentToSettings, setSent] = useState<Set<PermId>>(new Set());
   const [asking, setAsking] = useState<PermId | null>(null);
   const ask = async (id: PermId) => {
@@ -131,7 +131,7 @@ function useSetupItems(state: AppState, slow = false) {
     setAsking(id);
     try {
       const now = await p.request(id);
-      // Windows answers Screen Recording in System Settings (its prompt offers to open it), and a grant
+      // Windows answers screen capture in Windows Settings (its prompt offers to open it), and a grant
       // there only applies after a restart: offer one from here on.
       if (id === "screen" && now !== "granted") setSent((s) => new Set(s).add("screen"));
     } finally {
@@ -252,7 +252,7 @@ function PermissionCard({ id, items }: { id: "screen" | "microphone" | "notifica
   if (!perms.inApp)
     return <Card icon={ICONS[id]} title={copy.title} line={copy.line} tone="none" status="Needs the Bops app for Windows" />;
   if (!s) return <Card icon={ICONS[id]} title={copy.title} line={copy.line} tone="none" status="Checking" />;
-  // Screen Recording turned on while Bops was open: Windows applies it on the next launch.
+  // screen capture turned on while Bops was open: Windows applies it on the next launch.
   const restart = id === "screen" && (perms.restart || (s !== "granted" && sentToSettings.has("screen")));
   const status =
     s === "granted"
