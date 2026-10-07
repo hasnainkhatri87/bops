@@ -88,6 +88,32 @@ jobs:
           retention-days: 30
           compression-level: 0
 
+      - name: Prepare direct Windows EXE names
+        if: github.ref == 'refs/heads/main'
+        shell: powershell
+        run: |
+          $setup = Get-ChildItem "dist-desktop\Bops Setup *.exe" | Select-Object -First 1
+          $portable = Get-ChildItem "dist-desktop\Bops *.exe" | Where-Object { $_.Name -notlike "*Setup*" } | Select-Object -First 1
+          if (-not $setup) { throw "Windows setup EXE was not produced" }
+          if (-not $portable) { throw "Windows portable EXE was not produced" }
+          Copy-Item $setup.FullName "dist-desktop\Bops-Windows-11-Setup-x64.exe" -Force
+          Copy-Item $portable.FullName "dist-desktop\Bops-Windows-11-Portable-x64.exe" -Force
+
+      - name: Publish direct Windows EXE downloads
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: windows-v0.0.6
+          name: Bops Windows 11 v0.0.6
+          target_commitish: ${{ github.sha }}
+          prerelease: false
+          make_latest: true
+          fail_on_unmatched_files: true
+          files: |
+            dist-desktop/Bops-Windows-11-Setup-x64.exe
+            dist-desktop/Bops-Windows-11-Portable-x64.exe
+            dist-desktop/SHA256SUMS.txt
+
       - name: Prepare direct-download EXEs
         if: github.ref == 'refs/heads/main'
         shell: powershell
