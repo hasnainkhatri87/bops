@@ -32,6 +32,9 @@ Windows builds can use a locally stored BYOK API from **Settings → AI API**.
 - Cloud-computer key sharing is off by default. When enabled, the AI API key is copied to the user's Orgo VM so cloud-computer agent tasks can run.
 - With strict privacy on, hosted Bops Cloud-backed integrations such as Composio, Honcho and phone services are unavailable unless equivalent self-hosted provider keys are configured.
 
+
+> Windows release validation also retries the local Win32 enumeration smoke check, and the runtime avoids executable metadata reads that can stall on protected processes.
+
 ## Requirements
 
 - Windows 11 x64
