@@ -89,13 +89,8 @@ $z = 0
   if ($w -lt 40 -or $h -lt 40) { return $true }
   try { $p = Get-Process -Id $processId -ErrorAction Stop } catch { return $true }
   $process = $p.ProcessName
-  $app = $process
-  try {
-    $desc = $p.MainModule.FileVersionInfo.FileDescription
-    if ($desc -and $desc.Trim()) { $app = $desc.Trim() }
-  } catch {}
   $items.Add([pscustomobject]@{
-    app_name = $app
+    app_name = $process
     process_name = $process
     pid = [int]$processId
     window_id = $hWnd.ToInt64()
@@ -112,14 +107,41 @@ $z = 0
 `;
 
 let windows: { at: number; list: Win[] } = { at: 0, list: [] };
+let windowsPending: Promise<Win[]> | null = null;
+
+const windowsAppName = (name: string) => {
+  const map: Record<string, string> = {
+    chrome: "Google Chrome",
+    msedge: "Microsoft Edge",
+    explorer: "File Explorer",
+    notepad: "Notepad",
+    code: "Visual Studio Code",
+    winword: "Word",
+    excel: "Excel",
+    powerpnt: "PowerPoint",
+    outlook: "Outlook",
+    teams: "Teams",
+    "ms-teams": "Teams",
+  };
+  return map[name.toLowerCase()] ?? name;
+};
 
 async function allWindows() {
   if (Date.now() - windows.at < 1500) return windows.list;
   if (WINDOWS) {
-    const out = await ps(WINDOWS_ENUM, 8000);
-    const parsed = out ? (JSON.parse(out) as Win[] | Win) : [];
-    windows = { at: Date.now(), list: Array.isArray(parsed) ? parsed : parsed ? [parsed] : [] };
-    return windows.list;
+    if (windowsPending) return windowsPending;
+    windowsPending = (async () => {
+      try {
+        const out = await ps(WINDOWS_ENUM, 8000);
+        const parsed = out ? (JSON.parse(out) as Win[] | Win) : [];
+        const list = (Array.isArray(parsed) ? parsed : parsed ? [parsed] : []).map((w) => ({ ...w, app_name: windowsAppName(w.process_name ?? w.app_name) }));
+        windows = { at: Date.now(), list };
+        return list;
+      } finally {
+        windowsPending = null;
+      }
+    })();
+    return windowsPending;
   }
   const r = await cua<{ windows?: Win[]; structuredContent?: { windows?: Win[] } }>("list_windows", {});
   windows = { at: Date.now(), list: r.windows ?? r.structuredContent?.windows ?? [] };
