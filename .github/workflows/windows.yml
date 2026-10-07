@@ -67,7 +67,7 @@ jobs:
 
             # Exercise the packaged BYOK privacy path without contacting an external provider.
             $body = @{
-              enabled = $false
+              enabled = $true
               blockBopsCloud = $true
               apiKey = "bops-ci-dummy-key"
               baseUrl = "https://api.openai.com/v1"
@@ -79,7 +79,7 @@ jobs:
             if (-not $saved.hasKey) { throw "Packaged BYOK API did not report a protected saved key" }
             if ($saved.PSObject.Properties.Name -contains "apiKey") { throw "Packaged BYOK API leaked the API key back to the client" }
             $read = Invoke-RestMethod "http://127.0.0.1:3210/api/ai" -TimeoutSec 15
-            if (-not $read.hasKey -or $read.chatModel -ne "gpt-test-chat" -or -not $read.blockBopsCloud) { throw "Packaged BYOK settings did not round-trip" }
+            if (-not $read.enabled -or -not $read.hasKey -or $read.chatModel -ne "gpt-test-chat" -or -not $read.blockBopsCloud) { throw "Packaged BYOK strict-privacy settings did not round-trip" }
             $clear = @{ enabled = $false; clearKey = $true } | ConvertTo-Json
             $cleared = Invoke-RestMethod "http://127.0.0.1:3210/api/ai" -Method POST -ContentType "application/json" -Body $clear -TimeoutSec 15
             if ($cleared.hasKey) { throw "Packaged BYOK key was not deleted" }
